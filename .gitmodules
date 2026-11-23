@@ -1,0 +1,9 @@
+[submodule "vendors/sam3_engine"]
+	path = vendors/sam3_engine
+	url = https://github.com/cupcakes04/sam3_engine.git
+[submodule "vendors/gemma_emb_engine"]
+	path = vendors/gemma_emb_engine
+	url = https://github.com/cupcakes04/gemma_emb_engine.git
+[submodule "vendors/boxmot"]
+	path = vendors/boxmot
+	url = https://github.com/mikel-brostrom/boxmot.git
