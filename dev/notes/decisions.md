@@ -56,11 +56,29 @@ flowchart LR
 
 **D-20 · `uv` manages every environment.** The core and each servant get their own `uv` venv; the user's engines are installed with `pip install -e vendors/<engine>`. System FFmpeg replaces what conda provided. *Why:* one fast tool with lockfiles, instead of conda plus pip.
 
-**D-21 · One gitignored `workspace/` holds everything heavy and local:** `media/`, `checkpoints/` and, from M1, `store/`. The root stays small: `CLAUDE.md`, `docs/`, `scripts/`, `src/`, `tests/`, `vendors/`, `workspace/` (plus `rin_v1/` until it's deleted). *Why:* the user's v1 habit; it keeps the root standard and tidy.
+**D-21 · One gitignored `workspace/` holds everything heavy and local:** `media/`, `checkpoints/` and, from M1, `store/`. The root stays small: `CLAUDE.md`, `dev/` (notes, research, scripts, tests, and the gitignored `rin_v1/`), `docs/` (the repo's real docs, from M1), `src/`, `vendors/`, `workspace/`, plus `pyproject.toml`. *Why:* the user's v1 habit; it keeps the root tidy, and keeps notes about building Rin apart from docs for someone using it.
 
 ## Proposed
 
-None right now.
+From the M0 usage draft ([milestones/M0/](milestones/M0/README.md)). Each becomes Agreed or is rewritten once the user has reviewed the draft.
+
+**D-22 · Everything that produces data is a run, and every step has one shape:** `module.verb(m, inputs, **own_args) -> Run`. That includes ingest, sampling, filters, selection, set operations, exports, training, evaluation and a person's drawn boxes (`human.annotate`). The Master only holds the store, judgments and queries. A servant is a caller in the core environment (real signature, checks arguments, no model imports) plus a job in the model's environment. *Why:* one provenance mechanism for everything, and a typo fails before the GPU starts.
+
+**D-23 · One folder per run, write once; no counters.** A job writes into a temporary folder and renames it into `store/runs/` as its last act, so a crashed job leaves nothing. Tables are DuckDB views over the runs' Parquet files; no file is ever rewritten. `run_id` is time + step + 4 random characters; records are keyed `(run_id, index)`. Judgments go in one new file per judging session. *Why:* v1's id counters, remapping and whole-catalog rewrites (CR-12, 2.35 s per commit) can't happen.
+
+**D-24 · An image is a media with one frame.** One media table, one frames table, one instances table. *Why:* halves v1's record types with no loss.
+
+**D-25 · Classes are plain strings; boxes are four [0, 1] columns.** No category table or alignment dicts: a servant maps its prompts to class names in its own arguments. Boxes are `x0, y0, x1, y1`; masks are COCO RLE; keypoints a list of `{name, x, y, score}`. *Why:* the simplest thing that queries well in SQL.
+
+**D-26 · Measure once, decide cheaply.** Expensive steps store everything they produce above a low floor (SAM3's `score_floor`, every filter score). Thresholds and quality gates are applied later, in a cheap step or the dataset query, and saved in that run's config. *Why:* changing a gate never re-runs the teacher or re-decodes video.
+
+**D-27 · What a judgment means.** Targets: an instance, a run's labels on a frame, or a span. A frame *accept* means every object of the class on that frame is labelled correctly. An instance *accept* keeps a box even below the score gate. Missing objects are fixed cheapest first: accept SAM3's low-score box; else a person clicks and SAM3 draws (`sam3.click`); else a person draws (`human.annotate`). Added boxes are runs with the person in `by`. The latest judgment on a target wins; nothing is deleted. *Why:* a missed person isn't a box anyone can reject, and a test set needs complete frames.
+
+**D-28 · Selections are ranked; budgets are prefixes.** Each selection writes up to `n_max` frames in order; budget N takes the first N. SAM3 labels the union of all selections once. *Why:* nested budgets give smoother curves and cut SAM3 time, the most expensive step.
+
+**D-29 · Frame images are decoded once into a cache in the store** (`store/frames/<media_id>/<frame_idx>.jpg`), the first time a servant needs them. Derived data: safe to delete. *Why:* no servant environment needs its own video decoding. *Cost:* JPEG is a second lossy compression; identical for every model, so comparisons stay fair.
+
+**D-30 · The test set is a random sample of the test day, never curated, and a person checks every frame.** Empty frames stay in. *Why:* a curated test set rewards the method that curated it; empty frames are where false positives show up.
 
 ## Open
 

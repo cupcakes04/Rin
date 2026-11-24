@@ -1,6 +1,6 @@
 # Brainstorms
 
-The user writes freely in [brainstorm.md](brainstorm.md), the inbox. The agent ingests it at the start of a session (the loop is in [CLAUDE.md, "How we iterate"](../../CLAUDE.md#how-we-iterate)). Each ingested brainstorm leaves two files here:
+The user writes freely in [brainstorm.md](brainstorm.md), the inbox. The agent ingests it at the start of a session (the loop is in [CLAUDE.md, "How we iterate"](../../../CLAUDE.md#how-we-iterate)). Each ingested brainstorm leaves two files here:
 - `raw_<date>.md`: the user's own words, unedited.
 - `processed_<date>.md`: where each point went, with the agent's verdict.
 

@@ -20,4 +20,4 @@ The raw text is in [raw_2026-11-23.md](raw_2026-11-23.md), unedited. This table 
 | Actors are 99% humans; others deserve something | Generic tracks for any class; specialists only for people | [ideas/actors.md](../ideas/actors.md) |
 | Don't write wrapper engines; read model cards and install directly (Qwen install was a WSL2 headache) | Agreed. Servants call vendor APIs; docs record only what the card doesn't say | D-01, [models/vlm.md](../models/vlm.md) |
 | Holy grail: feature embeddings, statistics for a good spread, filter static frames, closed-loop iteration, verification on real data | Not foolish: established practice (coverage / coreset). Adopted as the first goal, with an experiment that proves it | D-04, [ideas/holy_grail.md](../ideas/holy_grail.md) |
-| Rules: no pedantry, no sycophancy, less ambiguity; the user runs git and outside commands; 16 GB card | Carried over | [CLAUDE.md](../../CLAUDE.md) |
+| Rules: no pedantry, no sycophancy, less ambiguity; the user runs git and outside commands; 16 GB card | Carried over | [CLAUDE.md](../../../CLAUDE.md) |

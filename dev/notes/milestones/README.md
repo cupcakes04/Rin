@@ -1,6 +1,6 @@
 # Milestones
 
-> Planned **one ahead** (D-19): the next milestone gets a detailed file when it starts; the rest stay one line each and are reshaped by what we learn. A finished milestone's file is folded into the docs or deleted.
+> Planned **one ahead** (D-19): the running milestone gets a folder, `M<n>/`, holding its README (scope, open points, debt) and its working drafts. The rest stay one line each and are reshaped by what we learn. When a milestone is done, what lasts moves out of its folder (into `dev/notes/`, or `docs/` for user-facing docs) and the folder is deleted.
 
 ```mermaid
 flowchart LR
@@ -10,8 +10,8 @@ flowchart LR
 
 | ID | Milestone | Done when | Status |
 |---|---|---|---|
-| M0 | **Usage draft** | The agent has written the notebook code the holy grail loop *should* read like, as a teaching document: each call explained, plus the data model it implies. The user has read it, asked questions, edited it and approved it. That settles the data model | next |
-| M1 | Core + ingest | MEVA media in the store with frame indexes and pts; queries work; CPU tests pass | — |
+| M0 | **Usage draft** | The agent has written the notebook code the holy grail loop *should* read like, as a teaching document: each call explained, plus the data model it implies. The user has read it, asked questions, edited it and approved it. That settles the data model. Folder: [M0/](M0/README.md) | in review |
+| M1 | Core + ingest | MEVA media in the store with frame indexes and pts; queries work; CPU tests pass; `docs/install.md` sets up the core environment from scratch | — |
 | M2 | Cheap filters + embeddings | We know how many frames survive each filter, and the cost per frame | — |
 | M3 | Teacher + checked test set | SAM3 labels the test day; the user checks them in FiftyOne (D-16) and the judgments are stored; SAM3's cost and misses are measured | — |
 | M4 | Selection + student | Three selection methods; YOLO export; one student per budget | — |

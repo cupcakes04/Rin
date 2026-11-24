@@ -14,7 +14,7 @@ flowchart TB
 
 ## MEVA slice (holy grail pool and test)
 
-To re-download: `bash scripts/pull_meva.sh` (needs only curl; skips files already on disk).
+To re-download: `bash dev/scripts/pull_meva.sh` (needs only curl; skips files already on disk).
 
 | Set | Path | Content |
 |---|---|---|
@@ -55,4 +55,4 @@ flowchart LR
 
 - **Local files** are for libraries that take a file path (the SAM3 engine, Ultralytics).
 - **Everything that loads with `from_pretrained`** stays in the HF cache: don't copy it into `workspace/`.
-- v1's tuned `botsort_best.yaml` was left behind on purpose, because its tuning was broken (v1 CR-29). Sapiens 1 checkpoints stay in `rin_v1`, unused.
+- v1's tuned `botsort_best.yaml` was left behind on purpose, because its tuning was broken (v1 CR-29). Sapiens 1 checkpoints stay in `dev/rin_v1`, unused.

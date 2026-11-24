@@ -17,6 +17,8 @@ Tuning belongs to **deployment**. Labelling doesn't need BoxMOT, because SAM3 tr
 
 ## Known traps (from v1)
 
+- SAM3 video tracking has object limits (multiplex: 16 by default) that a 30-person CCTV scene exceeds: see [models, known gotchas](../models/README.md#known-gotchas). Measure VRAM per tracked object before relying on SAM3 tracks as ground truth.
+
 - In v1, all 50 tuning trials scored 0.0. BotSort with camera-motion compensation needs the frame passed in, the call didn't pass it, and a bare `except` swallowed the error (v1 CR-29). Rule: fail loudly.
 - The "hota" metric silently fell back to MOTA. Rule: compute HOTA with a known implementation (TrackEval, or BoxMOT's own evaluation), or refuse.
 - Every BoxMOT tuning backend imports Ray Tune, and Ray broke on WSL2. Options: fix Ray on WSL2 (often local mode or the shared-memory settings), or drive Optuna ourselves against BoxMOT's evaluator.

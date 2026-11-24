@@ -1,6 +1,6 @@
 # Lessons from Rin v1
 
-> From reading `rin_v1/` in full (2026-11-23). v1 ids (ADR-n, CR-n, debt An) refer to `rin_v1/.claude/plans/`.
+> From reading `dev/rin_v1/` in full (2026-11-23). v1 ids (ADR-n, CR-n, debt An) refer to `dev/rin_v1/.claude/plans/`.
 
 ## Size, for scale
 

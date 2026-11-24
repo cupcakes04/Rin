@@ -47,7 +47,7 @@ Lowering these is the first thing to try before dropping to a smaller model.
 
 ## WSL2 gotchas for vLLM (from v1, tested there)
 
-Full notes: `rin_v1/docs/notes/services/qwen/qwen_install.md`.
+Full notes: `dev/rin_v1/docs/notes/services/qwen/qwen_install.md`.
 
 | Symptom | Fix |
 |---|---|

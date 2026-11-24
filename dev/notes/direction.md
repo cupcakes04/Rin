@@ -126,4 +126,4 @@ Mask2Former is parked (D-06). Details per model: [models/README.md](models/READM
 
 ## 7. How we work
 
-See [CLAUDE.md, "How we iterate"](../CLAUDE.md#how-we-iterate): the user brainstorms, the agent ingests, the user answers decisions, then milestones run, with `state.md` as the handoff between sessions.
+See [CLAUDE.md, "How we iterate"](../../CLAUDE.md#how-we-iterate): the user brainstorms, the agent ingests, the user answers decisions, then milestones run, with `state.md` as the handoff between sessions.

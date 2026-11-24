@@ -3,7 +3,7 @@
 # Re-runnable: files already on disk are skipped. Needs only curl (no AWS CLI).
 set -euo pipefail
 BASE=https://mevadata-public-01.s3.amazonaws.com
-D="$(cd "$(dirname "$0")/.." && pwd)/workspace/media/meva"
+D="$(cd "$(dirname "$0")/../.." && pwd)/workspace/media/meva"
 mkdir -p "$D/pool" "$D/test"
 
 pull() { # s3_prefix dest_dir camera_regex max_files

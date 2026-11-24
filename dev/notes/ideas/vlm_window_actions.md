@@ -44,4 +44,4 @@ MEVA ships activity annotations (37 types). They can measure the VLM windows the
 
 - Cost: actors × windows × prompts. Bound it by running only on windows where the actor moves.
 - Gemma 4 vs Qwen3-VL: Gemma 4 is untested here.
-- Video tubelet models (VideoMAE2 etc.): revisit only if the DINOv3 head clearly underperforms on the eval set. v1 design notes for a DINOv3 temporal head: `rin_v1/docs/notes/TAD/offlineTAD_opticalflow_dino.md` (motion from patch correlation) and `rin_v1/docs/notes/TAD/online_TAD_kvcache.md` (causal transformer head).
+- Video tubelet models (VideoMAE2 etc.): revisit only if the DINOv3 head clearly underperforms on the eval set. v1 design notes for a DINOv3 temporal head: `dev/rin_v1/docs/notes/TAD/offlineTAD_opticalflow_dino.md` (motion from patch correlation) and `dev/rin_v1/docs/notes/TAD/online_TAD_kvcache.md` (causal transformer head).
