@@ -1,6 +1,6 @@
 # Usage draft: the holy grail loop as a notebook
 
-> **Status: M0 draft, waiting for the user's review.** No code exists yet. This is the notebook the holy grail loop *should* read like once M1–M6 are built; the code gets written to match it, not the other way round. The tables it implies are in [data_model.md](data_model.md); its design calls are D-22 … D-30 under **Proposed** in [decisions.md](../../decisions.md).
+> **Agreed with the user in M0 (2026-11-24).** This is the notebook the holy grail loop *should* read like once M1–M6 are built; the code gets written to match it, not the other way round. Each milestone turns its part into a real notebook and updates this file where reality differed; changes to the API need the user's OK (D-15, [direction §6](direction.md#6-roles)). The tables it implies are in [data_model.md](data_model.md); its design calls are D-22 … D-30 in [decisions.md](decisions.md).
 
 **How to read it.** Each cell is followed by three lines: what it does, why it is there, and what breaks without it. Numbers marked `# placeholder` are not measured yet; the milestone in the comment measures them. Parts A and B are close to what M1–M3 will build. Parts C3 and D are sketches that M4–M6 will reshape.
 
@@ -119,7 +119,7 @@ len(kept)
 
 - **What:** `score_frames` measures each frame (frame difference, variance of the Laplacian, clipped histogram ends) and stores the numbers. `keep` applies thresholds to the stored numbers and writes the survivors as a new frame set.
 - **Why:** scoring decodes video and is slow; choosing a threshold is a query and takes no time. Splitting them means you can try five thresholds without decoding again (D-26). The `where` text is saved in the run, so the threshold is never lost.
-- **Without it:** idle CCTV fills the selection with empty, identical frames, and farthest-point selection picks blurred glitches because they look "far" from everything ([holy_grail §3](../../ideas/holy_grail.md#3-selection-methods-to-compare)).
+- **Without it:** idle CCTV fills the selection with empty, identical frames, and farthest-point selection picks blurred glitches because they look "far" from everything ([holy_grail §3](ideas/holy_grail.md#3-selection-methods-to-compare)).
 
 ### A4 · Embed
 
@@ -135,8 +135,8 @@ emb.vectors().shape               # (len(kept), 1024)
 
 - **What:** a batch job in the DINOv3 environment: one vector per frame, saved as an array file plus an index table.
 - **Why:** selection needs a sense of "how different are these two frames"; distance between embeddings is that sense.
-- **Without it:** the only selection left is random. Note the risk: on a fixed camera whole-frame vectors may barely differ ([holy_grail §4](../../ideas/holy_grail.md#4-the-main-risk-fixed-cameras)). Then `what=["box_pooled"]` with person boxes is the next try, and the rest of the notebook doesn't change.
-- **Why DINOv3 and not EmbeddingGemma 2:** they measure different kinds of "different". DINOv3 learned from images alone, so its distance tracks what the picture looks like: where people stand, how big, how lit, how occluded. That is what a person detector has to learn. EmbeddingGemma learned to match images to text, so its distance tracks what you would *say* about a frame. "A schoolyard with people" describes most of the pool, so many frames a detector would find different could come out close together. That is a reasoned guess, not a measurement. Gemma's real strength is text search ("people carrying boxes", [search.md](../../ideas/search.md)), which comes after the holy grail.
+- **Without it:** the only selection left is random. Note the risk: on a fixed camera whole-frame vectors may barely differ ([holy_grail §4](ideas/holy_grail.md#4-the-main-risk-fixed-cameras)). Then `what=["box_pooled"]` with person boxes is the next try, and the rest of the notebook doesn't change.
+- **Why DINOv3 and not EmbeddingGemma 2:** they measure different kinds of "different". DINOv3 learned from images alone, so its distance tracks what the picture looks like: where people stand, how big, how lit, how occluded. That is what a person detector has to learn. EmbeddingGemma learned to match images to text, so its distance tracks what you would *say* about a frame. "A schoolyard with people" describes most of the pool, so many frames a detector would find different could come out close together. That is a reasoned guess, not a measurement. Gemma's real strength is text search ("people carrying boxes", [search.md](ideas/search.md)), which comes after the holy grail.
 - **Both is cheap to test:** an embedding is just another run, so `gemma.embed(m, kept, task="clustering")` would slot into A5 and C1 unchanged. Recommendation: DINOv3 alone for the first curve; add a Gemma line only if DINOv3 whole-frame doesn't beat random, alongside the foreground features above.
 
 ### A5 · De-duplicate

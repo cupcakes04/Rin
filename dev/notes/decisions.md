@@ -32,6 +32,7 @@ flowchart LR
 **D-17 · Holy grail setup:**
 - class "person" first;
 - student YOLO, with RF-DETR as the fallback if YOLO hits a dead end;
+- selection embeds frames with DINOv3; EmbeddingGemma 2 is tried only if whole-frame DINOv3 doesn't beat random ([usage A4](usage.md#a4--embed));
 - success means curated selection reaches random selection's test mAP with half the labels or fewer.
 
 **D-18 · Servants are rewritten, not ported from v1.** v1's engines are shaped around its pillar contracts (`setup`, `categories`, `ground_*`, HTTP apps), and the user's vendor engines (`sam3_engine`, `gemma_emb_engine`) already are the clean API. v1 stays a source of *facts* (gotchas, working settings, label lists). Its pure helpers are salvaged one at a time, with the user's OK ([lessons §Salvage](lessons/rin_v1.md#salvage-code-worth-keeping)).
@@ -58,10 +59,6 @@ flowchart LR
 
 **D-21 · One gitignored `workspace/` holds everything heavy and local:** `media/`, `checkpoints/` and, from M1, `store/`. The root stays small: `CLAUDE.md`, `dev/` (notes, research, scripts, tests, and the gitignored `rin_v1/`), `docs/` (the repo's real docs, from M1), `src/`, `vendors/`, `workspace/`, plus `pyproject.toml`. *Why:* the user's v1 habit; it keeps the root tidy, and keeps notes about building Rin apart from docs for someone using it.
 
-## Proposed
-
-From the M0 usage draft ([milestones/M0/](milestones/M0/README.md)). Each becomes Agreed or is rewritten once the user has reviewed the draft.
-
 **D-22 · Everything that produces data is a run, and every step has one shape:** `module.verb(m, inputs, **own_args) -> Run`. That includes ingest, sampling, filters, selection, set operations, exports, training, evaluation and a person's drawn boxes (`human.annotate`). The Master only holds the store, judgments and queries. A servant is a caller in the core environment (real signature, checks arguments, no model imports) plus a job in the model's environment. *Why:* one provenance mechanism for everything, and a typo fails before the GPU starts.
 
 **D-23 · One folder per run, write once; no counters.** A job writes into a temporary folder and renames it into `store/runs/` as its last act, so a crashed job leaves nothing. Tables are DuckDB views over the runs' Parquet files; no file is ever rewritten. `run_id` is time + step + 4 random characters; records are keyed `(run_id, index)`. Judgments go in one new file per judging session. *Why:* v1's id counters, remapping and whole-catalog rewrites (CR-12, 2.35 s per commit) can't happen.
@@ -80,6 +77,10 @@ From the M0 usage draft ([milestones/M0/](milestones/M0/README.md)). Each become
 
 **D-30 · The test set is a random sample of the test day, never curated, and a person checks every frame.** Empty frames stay in. *Why:* a curated test set rewards the method that curated it; empty frames are where false positives show up.
 
-## Open
+## Proposed
 
 None right now.
+
+## Open
+
+**Where a person's clicks and drawn boxes are collected** ([usage B3](usage.md#b3--a-person-checks-it)). FiftyOne tags frames and boxes; whether it can also collect clicks for `sam3.click` and hand-drawn boxes is unchecked. The agent brings one recommendation at the start of M3.

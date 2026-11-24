@@ -16,8 +16,8 @@ flowchart TB
     REF -.-> MS
 ```
 
-Read in this order: [state.md](state.md) → [direction.md](direction.md) → [decisions.md](decisions.md) → [ideas/holy_grail.md](ideas/holy_grail.md) → [milestones/README.md](milestones/README.md).
+Read in this order: [state.md](state.md) → [direction.md](direction.md) → [decisions.md](decisions.md) → [usage.md](usage.md) → [data_model.md](data_model.md) → [ideas/holy_grail.md](ideas/holy_grail.md) → [milestones/README.md](milestones/README.md).
 
-The core (M0 draft, in review): [milestones/M0/](milestones/M0/README.md)
+The core, agreed in M0: [data_model.md](data_model.md) (the tables) · [usage.md](usage.md) (the notebook the code must read like)
 
 Reference: [models/](models/README.md) · [data.md](data.md) · [lessons/rin_v1.md](lessons/rin_v1.md) · [ideas/](ideas/README.md) · [brainstorms/](brainstorms/README.md)

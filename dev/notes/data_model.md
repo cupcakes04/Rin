@@ -1,6 +1,6 @@
 # Data model
 
-> **Status: M0 draft, waiting for the user's review.** It is the data model implied by the usage draft, [usage.md](usage.md). Nothing here is final until the user approves it. The design calls it makes are D-22 … D-30 under **Proposed** in [decisions.md](../../decisions.md).
+> **Agreed with the user in M0 (2026-11-24).** The core's data model, implied by the usage draft, [usage.md](usage.md). The user owns it: changes need the user's OK. Its design calls are D-22 … D-30 in [decisions.md](decisions.md).
 
 ## 1. The idea in three sentences
 
