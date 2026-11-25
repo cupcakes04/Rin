@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Download the MEVA slice used by the holy grail experiment (see docs/data.md).
+# Download the MEVA slice used by the holy grail experiment (see dev/notes/heavy_data.md).
 # Re-runnable: files already on disk are skipped. Needs only curl (no AWS CLI).
 set -euo pipefail
 BASE=https://mevadata-public-01.s3.amazonaws.com

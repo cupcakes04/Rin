@@ -48,6 +48,7 @@ One environment per servant when dependencies clash, and they do: BoxMOT was on 
 ## Known gotchas
 
 - **Sapiens2 weights come twice per HF repo:** `model.safetensors` (for `transformers`) and `sapiens2_<size>_<task>.safetensors` (for the vendor repo's standalone loader), about 6 GB each at 1B. Download only the first, naming the files: `hf download facebook/sapiens2-<task>-1b config.json preprocessor_config.json model.safetensors`. A multi-name `--include` silently dropped `config.json` here. Pose is top-down: pass person boxes as COCO `(x, y, w, h)` in pixels, and the processor crops. v1's Sapiens 1 `torch.export` problem doesn't apply.
+- **DINOv3 register tokens:** `last_hidden_state` is `[CLS, register tokens, patch tokens]`. Strip the registers before averaging patches or reshaping them into a 2-D grid, or the features are quietly wrong (mean) or the reshape fails. Read the count from `model.config.num_register_tokens`; v1 hard-coded positions `1:5` (4 registers) in `dev/rin_v1/src/rin/services/extract/dino3/engine.py` (`_clean_tokens`).
 - **SAM3 (v1 CR-25):** a long-lived SAM3 process kept the previous job's prompts. Batch jobs (D-07) avoid this by design.
 - **SAM3 object limits, for crowded CCTV (about 30 people per scene):** per-image detection has 200 queries (`num_queries=200` in the vendored `model_builder.py`), so a crowded frame fits; the holy grail only uses per-frame detection. Tracking is different: SAM 3.1 multiplex tracks at most `EngineConfig.multiplex_max_num_objects` objects (default 16), and both video sessions use more VRAM per tracked object. Matters for [tracker tuning](../ideas/tracker_tuning.md); not measured here yet.
 - **vLLM on WSL2:** see [vlm.md](vlm.md).
@@ -55,3 +56,5 @@ One environment per servant when dependencies clash, and they do: BoxMOT was on 
 ## v1 notes worth reading before writing a servant
 
 `dev/rin_v1/docs/notes/services/`: `sam3/` (image and video usage), `gg_emb2/`, `qwen/` (install, prompting, 4B and 8B FP8 fits), `sapiens/install.md`, `boxmot/install.md`.
+
+Working environment pins per model (Python version, CUDA wheel index, BoxMOT extras `[cu130,evolve,service]`, `torchcodec` for EmbeddingGemma video): `dev/rin_v1/src/rin/cli/configs/environments.yaml`. A starting point for each servant's `uv` environment, not a copy.

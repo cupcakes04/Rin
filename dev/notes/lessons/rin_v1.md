@@ -42,19 +42,24 @@ About 60% of the SDK was the layer between the data and the models. After milest
 | **Infrastructure before a closed loop** | Studio M0–M4: branches, jobs, governor and API, with 662 tests, while no workflow had run end to end |
 | **One JSON catalog** | 2.35 s per commit at 250k records. Each ingest rewrote the whole file |
 
-## Salvage: code worth keeping
+## Worth reading: v1 code with facts in it
 
-Servants are rewritten (D-18). These pure helpers are worth reading, and copying with the user's OK, when the milestone that needs them starts:
+Nothing is copied (D-18). These files hold rules, edge cases and test cases worth reading when the milestone that needs them starts:
 
 | v1 file | What | Needed in |
 |---|---|---|
 | `src/rin/codecs/timecoder.py` (`read_frame_times`, `frames_at`) | Time → the frame on screen at that time, from real per-frame timestamps (VFR-correct, tested with a VFR fixture) | M1 |
 | `src/rin/codecs/spatial_ops/convert.py` | RLE ↔ mask ↔ polygon, bbox from polygon or keypoints | M3–M4 |
 | `src/rin/codecs/spatial_ops/calculate.py` | Normalise, denormalise, expand (context padding), IoU | M2–M4 |
-| `src/rin/data/export/yolo/writer.py`, `coco/writer.py` | Known-good layouts for YOLO and COCO exports | M4 |
+| `src/rin/data/export/yolo/writer.py`, `coco/writer.py` | Known-good layouts for YOLO and COCO exports. YOLO `segment` export must turn SAM3's RLE masks into polygons (v1 CR-28: it silently wrote boxes) | M4 |
+| `src/rin/data/export/rfdetr/writer.py`, `mot/writer.py` | RF-DETR wants `train/ valid/ test/` (not `val/`), each with `_annotations.coco.json`; its best weights are `checkpoint_best_ema.pth` (`services/ground/rfdetr/engine.py`). MOT wants `seqinfo.ini` and `det/det.txt` | RF-DETR fallback, tracker tuning |
+| `src/rin/data/core/recorder.py`, `tests/sdk/test_catalog_invariants.py` | The write-time [0, 1] geometry check (D-10) for boxes, polygons and keypoints: clamp rounding jitter within 1e-6, raise beyond it, keep boxes inside the image. v1 stored `(x, y, w, h)`; v2's `x0, y0, x1, y1` also needs `x0 ≤ x1`, `y0 ≤ y1` | M3 (`instances` schema) |
+| `src/rin/cli/configs/environments.yaml` | Working Python, CUDA and package pins per model ([models/](../models/README.md#v1-notes-worth-reading-before-writing-a-servant)) | M2 onwards |
+| `src/rin/codecs/somcoder.py` | Drawing numbered boxes on frames for a VLM (set-of-marks): badge contrast from the background's brightness, labels that don't cover the person | actions ([vlm_window_actions.md](../ideas/vlm_window_actions.md)) |
+| `docs/notes/schemas/class_labels_multi_labels.md` | Label design for actions: observation vs interpretation, verbs apart from nouns, one softmax head per factor with a `__NULL__` class instead of thresholded multi-label | actions |
 | `src/rin/data/transform/pooler.py` | Bilinear RoI pooling of a DINOv3 patch grid inside a box | holy grail §4, search |
 | `src/rin/contracts/clients/ground/sapiens/goliath.py` | Goliath 308 keypoint names (kept in sync with the vendor config) | actors |
-| `tests/sdk/data/` | VFR and CFR video fixtures | M1 |
+| `tests/sdk/test_vfr_timing.py`, `tests/sdk/data/make_vfr_clip.py` | The VFR and CFR test cases, and how to make a clip whose pixels tell which frame came back | M1 |
 
 Everything else (contracts, clients, service apps, Servant, Master, Recorder, staging, the Studio backend) is not carried over.
 

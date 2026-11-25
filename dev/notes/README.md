@@ -7,7 +7,7 @@ flowchart TB
     DEC["decisions.md<br/>agreed · proposed · open"]
     IDE["ideas/<br/>holy grail · actions · tracking · …"]
     MS["milestones/<br/>next one in detail"]
-    REF["models/ · data.md · lessons/rin_v1.md"]
+    REF["models/ · heavy_data.md · lessons/rin_v1.md"]
     BR["brainstorms/<br/>brainstorm.md inbox + processed archive"]
     ST --> MS
     DIR --> DEC --> MS
@@ -20,4 +20,4 @@ Read in this order: [state.md](state.md) → [direction.md](direction.md) → [d
 
 The core, agreed in M0: [data_model.md](data_model.md) (the tables) · [usage.md](usage.md) (the notebook the code must read like)
 
-Reference: [models/](models/README.md) · [data.md](data.md) · [lessons/rin_v1.md](lessons/rin_v1.md) · [ideas/](ideas/README.md) · [brainstorms/](brainstorms/README.md)
+Reference: [models/](models/README.md) · [heavy_data.md](heavy_data.md) · [lessons/rin_v1.md](lessons/rin_v1.md) · [ideas/](ideas/README.md) · [brainstorms/](brainstorms/README.md)

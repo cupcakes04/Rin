@@ -35,7 +35,7 @@ flowchart LR
 - selection embeds frames with DINOv3; EmbeddingGemma 2 is tried only if whole-frame DINOv3 doesn't beat random ([usage A4](usage.md#a4--embed));
 - success means curated selection reaches random selection's test mAP with half the labels or fewer.
 
-**D-18 · Servants are rewritten, not ported from v1.** v1's engines are shaped around its pillar contracts (`setup`, `categories`, `ground_*`, HTTP apps), and the user's vendor engines (`sam3_engine`, `gemma_emb_engine`) already are the clean API. v1 stays a source of *facts* (gotchas, working settings, label lists). Its pure helpers are salvaged one at a time, with the user's OK ([lessons §Salvage](lessons/rin_v1.md#salvage-code-worth-keeping)).
+**D-18 · Everything is written fresh; v1 is read, never copied.** v1's engines are shaped around its pillar contracts (`setup`, `categories`, `ground_*`, HTTP apps), and the user's vendor engines (`sam3_engine`, `gemma_emb_engine`) already are the clean API. v1 stays a source of *facts*: gotchas, working settings, label lists, and the cases its tests checked ([lessons §Worth reading](lessons/rin_v1.md#worth-reading-v1-code-with-facts-in-it)). *Why:* the user puts modular organisation first; copied code brings v1's shape with it.
 
 **D-19 · Milestones are planned one ahead.** Only the next milestone gets a detailed file; later ones stay one line each and are reshaped by what we learn. *Why:* v1's plans ballooned before the first loop ran.
 
@@ -69,13 +69,15 @@ flowchart LR
 
 **D-26 · Measure once, decide cheaply.** Expensive steps store everything they produce above a low floor (SAM3's `score_floor`, every filter score). Thresholds and quality gates are applied later, in a cheap step or the dataset query, and saved in that run's config. *Why:* changing a gate never re-runs the teacher or re-decodes video.
 
-**D-27 · What a judgment means.** Targets: an instance, a run's labels on a frame, or a span. A frame *accept* means every object of the class on that frame is labelled correctly. An instance *accept* keeps a box even below the score gate. Missing objects are fixed cheapest first: accept SAM3's low-score box; else a person clicks and SAM3 draws (`sam3.click`); else a person draws (`human.annotate`). Added boxes are runs with the person in `by`. The latest judgment on a target wins; nothing is deleted. *Why:* a missed person isn't a box anyone can reject, and a test set needs complete frames.
+**D-27 · What a judgment means.** Targets: an instance, a run's labels on a frame, or a span. A frame *accept* means every object of the class on that frame is labelled correctly. An instance *accept* keeps a box even below the score gate. Missing objects are fixed cheapest first: accept SAM3's low-score box; else a person clicks and SAM3 draws (`sam3.click`); else a person draws (`human.annotate`). Added boxes are runs with the person in `who`. The latest judgment on a target wins; nothing is deleted. *Why:* a missed person isn't a box anyone can reject, and a test set needs complete frames.
 
 **D-28 · Selections are ranked; budgets are prefixes.** Each selection writes up to `n_max` frames in order; budget N takes the first N. SAM3 labels the union of all selections once. *Why:* nested budgets give smoother curves and cut SAM3 time, the most expensive step.
 
 **D-29 · Frame images are decoded once into a cache in the store** (`store/frames/<media_id>/<frame_idx>.jpg`), the first time a servant needs them. Derived data: safe to delete. *Why:* no servant environment needs its own video decoding. *Cost:* JPEG is a second lossy compression; identical for every model, so comparisons stay fair.
 
 **D-30 · The test set is a random sample of the test day, never curated, and a person checks every frame.** Empty frames stay in. *Why:* a curated test set rewards the method that curated it; empty frames are where false positives show up.
+
+**D-31 · Students pick their checkpoint on a fixed val split: whole recordings held out from the pool day.** Ingested as `split="val"`, so selection never sees them. Labelled by SAM3 and not checked by a person: val only chooses `best.pt`, it never scores anything. Every method, seed and budget uses the same val set and trains on all N of its frames. Which clips: chosen in M4. *Why:* Ultralytics needs a val set to pick a checkpoint. Using the test set would leak it into training; carving val out of the N selected frames splits by frame (D-13) and shrinks every budget.
 
 ## Proposed
 
@@ -84,3 +86,6 @@ None right now.
 ## Open
 
 **Where a person's clicks and drawn boxes are collected** ([usage B3](usage.md#b3--a-person-checks-it)). FiftyOne tags frames and boxes; whether it can also collect clicks for `sam3.click` and hand-drawn boxes is unchecked. The agent brings one recommendation at the start of M3.
+
+**Which judgment makes a fixed frame count as complete** ([data_model judgments](data_model.md#judgments-a-persons-or-a-rules-verdict), [usage B3–B4](usage.md#b3--a-person-checks-it)). A frame *accept* points at one `run_id`, but once a person has added missed people, the frame's full labels span several runs: SAM3's, `sam3.click`'s and `human.annotate`'s. Accepting it against `test_labels` alone would claim SAM3's run was complete when it wasn't. The agent brings one recommendation at the start of M3, with the question above: the test set (usage B4) can't be frozen without it.
+- **The clicked points, lower priority:** they are what a `sam3.click` box was made from, so keeping them in that run's record costs almost nothing. Later they could serve as human-feedback data (the user's thought, for an RLHF-style loop). Not a goal now.

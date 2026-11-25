@@ -2,36 +2,35 @@
 
 > The handoff between sessions. The agent rewrites this file at the end of every session ([CLAUDE.md, "How we iterate"](../../CLAUDE.md#how-we-iterate)). Current truth only.
 
-**Updated:** 2026-11-24
+**Updated:** 2026-11-25
 
 ## Phase
 
 ```mermaid
 flowchart LR
-    A["Direction<br/>✅ agreed"] --> B["Docs organised<br/>✅"] --> C["Data + checkpoints<br/>✅ in workspace/"] --> D["M0 usage draft<br/>✅ agreed"] --> E["M1 core + ingest<br/>⏭ next"]
-    style E fill:#fde68a,color:#000
+    A["Direction<br/>✅ agreed"] --> D["M0 usage draft<br/>✅ agreed"] --> E["M1 core + ingest<br/>✅ closed"] --> F["M2 filters + embeddings<br/>📝 scoping"]
+    style F fill:#fde68a,color:#000
 ```
 
 ## Done
-- Read all of v1. Postmortem and salvage list: [lessons/rin_v1.md](lessons/rin_v1.md).
-- **All decisions D-01 … D-21 are agreed**, including: `uv` for environments (D-20), and one gitignored `workspace/` for media, checkpoints and, later, the store (D-21). See [decisions.md](decisions.md).
-- MEVA slice, sample media and v1 checkpoints (SAM3, YOLO) are in `workspace/` ([data.md](data.md)).
-- Sapiens2 1B (pretrain, pose, seg) is in the HF cache. It loads natively with `transformers` ≥ 5.24, so the `vendors/sapiens2` submodule is no longer needed ([models](models/README.md)).
-- Ingested the first brainstorm ([brainstorms/processed_2026-11-23.md](brainstorms/processed_2026-11-23.md)). The inbox [brainstorms/brainstorm.md](brainstorms/brainstorm.md) is empty.
-- The working loop, inbox vs chat, the vendor feature-request rule and the rules for using rin_v1 are in [CLAUDE.md](../../CLAUDE.md).
-- **Repo reorganised** (2026-11-24, the user's call): working notes moved from `docs/` to `dev/notes/`; `rin_v1/` to `dev/rin_v1/` (still gitignored); `dev/` also holds `research/`, `scripts/`, `tests/`. Root `docs/` is kept free for the repo's real docs, starting with `docs/install.md` in M1. Layout table: [CLAUDE.md](../../CLAUDE.md#where-things-live). `pull_meva.sh` now finds the repo root from `dev/scripts/`.
-- **M0 done** (2026-11-24): the user agreed the usage draft and D-22 … D-30. The core's reference docs are [usage.md](usage.md) (the notebook the code must read like) and [data_model.md](data_model.md) (the tables). DINOv3 first for selection (D-17). Still open: the annotation tool (decisions, Open), for M3.
+- **Direction and decisions:** D-01 … D-31 agreed ([decisions.md](decisions.md)). The design target is [usage.md](usage.md) (the notebook the code must read like) on [data_model.md](data_model.md) (the tables).
+- **Data:** MEVA slice, sample media and v1 checkpoints in `workspace/` ([heavy_data.md](heavy_data.md)). Sapiens2 1B and DINOv3 ViT-L/16 and ViT-H+/16 in the HF cache ([models/](models/README.md)).
+- **M1 closed** (2026-11-25, user checked): store, ingest and sampling, 36 CPU tests. What exists and its rules: [docs/core.md](../../docs/core.md); setup: [docs/install.md](../../docs/install.md). The MEVA pool and test day are in `workspace/store`. Its debt moved to [milestones/M2/](milestones/M2/README.md#debt).
+- **External audit** (2026-11-25), each claim checked against the code and v1. It gave M1's truncation and early-check fixes, D-31 (val split), the M3 open question on fixed frames, and v1 facts now in [lessons/rin_v1.md](lessons/rin_v1.md), [models/](models/README.md) and [ideas/holy_grail.md](ideas/holy_grail.md).
+- The inbox [brainstorms/brainstorm.md](brainstorms/brainstorm.md) is empty.
 
 ## Next
-1. **M1, core + ingest** ([milestones](milestones/README.md)): confirm its scope with the user, then create `milestones/M1/`. First read v1's `codecs/timecoder.py` and VFR/CFR fixtures (salvage table, [lessons/rin_v1.md](lessons/rin_v1.md)); copying them needs the user's OK.
+1. **The user answers M2's three open points** ([milestones/M2/](milestones/M2/README.md#open-points-the-users-call)): who writes a servant's run, DINOv3 input size, where a servant's environment lives.
+2. Then the agent builds M2's CPU parts (frame reader, `score_frames`, `keep`, frame cache, `dedupe`, the DINOv3 caller), and hands over the DINOv3 install and embed as numbered GPU steps.
 
 ## Waiting on the user
-- Confirm M1's scope, and whether v1's timecoder and test fixtures may be salvaged.
-- Commit with `git add -A` (records the moves as renames): `dev/`, the deleted `docs/` and `scripts/` paths, `CLAUDE.md`, `.gitignore`.
+- M2's open points (above).
+- Commit: `pyproject.toml`, `uv.lock`, `src/`, `docs/`, `dev/tests/`, `dev/notes/` changes (including the rename `data.md` → `heavy_data.md` and the deleted `milestones/M1/`), `dev/scripts/pull_meva.sh`, `CLAUDE.md`, `.gitignore`.
 
 ## Vendor feature requests (to the user)
 None open.
 
 ## Repo facts a new session needs
-- Gitignored: `dev/rin_v1/`, `workspace/`.
+- Gitignored: `dev/rin_v1/`, `workspace/`, `.venv/`.
 - To re-download MEVA: `bash dev/scripts/pull_meva.sh` (skips files already on disk).
+- Core environment: `uv sync`; tests: `uv run pytest`. `workspace/store` is derived data: delete it and re-ingest (about 130 s).

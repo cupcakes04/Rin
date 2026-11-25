@@ -62,9 +62,9 @@ flowchart TB
 | `docs/` | The repo's real documentation for someone using Rin: installation, usage. Starts in M1, when there is something to install |
 | `src/` | The code (from M1) |
 | `vendors/` | Git submodules: the user's engines plus upstream repos (see "Vendors") |
-| `workspace/` | Everything heavy and local, gitignored: `media/`, `checkpoints/`, and from M1 `store/` ([dev/notes/data.md](dev/notes/data.md)) |
+| `workspace/` | Everything heavy and local, gitignored: `media/`, `checkpoints/`, and from M1 `store/` ([dev/notes/heavy_data.md](dev/notes/heavy_data.md)) |
 
-The root stays at `CLAUDE.md`, `dev/`, `docs/`, `src/`, `vendors/`, `workspace/`, plus `pyproject.toml` from M1. Anything else goes inside one of them.
+The root stays at `CLAUDE.md`, `dev/`, `docs/`, `src/`, `vendors/`, `workspace/`, plus `pyproject.toml` and `uv.lock` (the core environment, [docs/install.md](docs/install.md)). Anything else goes inside one of them.
 
 ## Roles
 - **User (executive + manager):** writes intent and feedback into the inbox, answers decisions, owns direction, the data model and the API. An electrical engineer, not a software engineer, who wants to learn: explain software choices in plain terms (what it does, why, what breaks without it), and teach through worked drafts.
@@ -76,9 +76,11 @@ The root stays at `CLAUDE.md`, `dev/`, `docs/`, `src/`, `vendors/`, `workspace/`
 
 ## Using rin_v1
 `dev/rin_v1/` is a source of **facts**, not code to port (D-18).
-- **When:** at the start of each milestone, read the parts of v1 that the milestone touches: the salvage table in [dev/notes/lessons/rin_v1.md](dev/notes/lessons/rin_v1.md), plus the matching `dev/rin_v1/docs/notes/` and v1 source.
-- **What to take:** gotchas, working settings and label lists go to [dev/notes/models/](dev/notes/models/README.md) or the milestone folder. A pure helper may be copied only with the user's OK, and gets rewritten to the new rules (fail loudly, current data model).
+- **When:** at the start of each milestone, read the parts of v1 that the milestone touches: the "Worth reading" table in [dev/notes/lessons/rin_v1.md](dev/notes/lessons/rin_v1.md), plus the matching `dev/rin_v1/docs/notes/` and v1 source.
+- **What to take:** gotchas, working settings, label lists and test cases go to [dev/notes/models/](dev/notes/models/README.md) or the milestone folder. Code is written fresh, organised modularly (D-18); nothing is copied.
 - **Never:** import from `rin_v1`, or copy its structure (pillars, contracts, Master/Recorder/Servant classes, staging).
+- **Attitude:** respect v1 as a predecessor as it already paid for its lessons,. Within the parts the milestone touches, don't skip v1 to stay "unbiased", missing a lesson v1 already learned costs more than reading too much. The bias to avoid is in decisions: take v1's *reasons* (the bug or constraint behind a choice), then decide fresh.
+
 
 ## Rules
 - **No sycophancy, no pedantry.** Give the honest view, including "this won't work".

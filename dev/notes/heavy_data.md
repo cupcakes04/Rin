@@ -1,4 +1,4 @@
-# Data
+# Heavy data
 
 Everything heavy and local lives in `workspace/` (gitignored, D-21).
 
@@ -21,7 +21,7 @@ To re-download: `bash dev/scripts/pull_meva.sh` (needs only curl; skips files al
 | Pool | `workspace/media/meva/pool/` | School site, cameras G299 and G330, 2018-03-07 09:55–10:55: 24 clips of 5 min, 4.2 GB |
 | Test | `workspace/media/meva/test/` | Same cameras on 2018-03-09, 10:10–10:25: 6 clips (15 min per camera), 1.1 GB |
 
-- **Format:** H.264 in `.avi`, 1920×1080, 30 fps, about 9,000 frames per clip (checked with ffprobe on one pool clip).
+- **Format:** H.264 in `.avi` with B-frames, 1920×1080. Measured at ingest (M1): 30 clips, 270,243 frames; every gap between frames is exactly 1/30 s; each clip's frame count matches ffprobe and the AVI header. The pool sampled at 2 fps is 14,424 frames.
 - **Why this slice:** one site and two fixed cameras over a continuous hour is what raw CCTV looks like. The test set comes from a different day, so it shares no near-duplicate frames with the pool (D-13).
 - **Source:** the public S3 bucket `mevadata-public-01` ([AWS Open Data](https://registry.opendata.aws/mevadata/)), folder `drops-123-r13/`. Paper: [arXiv 2012.00914](https://arxiv.org/abs/2012.00914).
 - **Activity annotations** (37 types, for the actions work later) are not downloaded yet. Kitware publishes them separately.

@@ -57,7 +57,7 @@ erDiagram
 | `inputs` | list[str] | The `run_id`s this run read |
 | `tags` | JSON | Free labels set by the caller, e.g. `{"method": "kcenter", "n": 250, "seed": 0}`. Used to group results (usage §C4) |
 | `code` | JSON | Git commit of Rin and of the vendor engine used |
-| `by` | str | Who started it: the user, or the person who drew the boxes for `human.*` runs |
+| `who` | str | Who started it: the user, or the person who clicked or drew the boxes for `sam3.click` and `human.*` runs. Not `by`: that is a reserved word in SQL |
 | `started_at`, `finished_at` | timestamp | |
 
 ### media: one row per file (written by `core.ingest`)
@@ -65,7 +65,7 @@ erDiagram
 | Column | Type | Meaning |
 |---|---|---|
 | `media_id` | str | Assigned at ingest. A path that is already ingested is refused, loudly |
-| `path` | str | Relative to `workspace/media/` |
+| `path` | str | Relative to `workspace/` (the store's parent), e.g. `media/meva/pool/….avi`. Media outside the workspace is refused, so store and media move together |
 | `kind` | `video` or `image` | An image is a media with exactly one frame (D-24) |
 | `width`, `height` | int | Pixels. Needed to turn stored [0, 1] geometry back into pixels (D-10) |
 | `n_frames` | int | Counted by decoding, not estimated from duration × fps |
@@ -78,9 +78,9 @@ erDiagram
 | Column | Type | Meaning |
 |---|---|---|
 | `media_id`, `frame_idx` | str, int | **The join key** for everything frame-level (D-09) |
-| `pts` | float | Seconds, from the container's own timestamps. Stored, never used to join |
+| `pts` | float | Seconds since frame 0, from the decoded frames' own timestamps (sorted into display order: AVI with B-frames attaches them scrambled). Stored, never used to join |
 
-One hour of the pool is about 216k rows (2 cameras × 30 fps × 3600 s). That is small for Parquet.
+The MEVA pool hour is 216,189 rows (measured in M1). That is small for Parquet.
 
 ### frame_sets: an ordered or unordered list of frames
 
@@ -145,15 +145,15 @@ Long format (one row per score), so a new score needs no new column.
 | `frame_end` | int or null | For `span` only (actions later; no holy grail step uses it) |
 | `verdict` | `accept` or `reject` | |
 | `reason` | str or null | "missed 2 people on the left" |
-| `by`, `at` | str, timestamp | |
+| `who`, `judged_at` | str, timestamp | Not `by` and `at`: both are reserved words in SQL |
 
 What the verdicts mean (D-27):
 - **frame, accept**: *every* object of the class on this frame is labelled, and the labels are right. This is the claim a test set needs. Accepting each box is not enough, because a person SAM3 missed is not a box anyone can reject.
 - **frame, reject**: don't use this run's labels on this frame.
 - **instance, reject**: drop this one box.
 - **instance, accept**: keep this box even if its score is below the gate. This is the first fix for a missed person: SAM3 often found them, with a low score, and D-26 kept the box.
-- **A person SAM3 never found** comes in as a new run: `sam3.click` (the person clicks, SAM3 draws box and mask) or, last resort, `human.annotate` (drawn by hand). Both carry the person in `by`.
-- **Latest wins**: when one target has several judgments, the one with the latest `at` counts. Nothing is deleted.
+- **A person SAM3 never found** comes in as a new run: `sam3.click` (the person clicks, SAM3 draws box and mask) or, last resort, `human.annotate` (drawn by hand). Both carry the person in `who`.
+- **Latest wins**: when one target has several judgments, the one with the latest `judged_at` counts. Nothing is deleted.
 
 ## 3. Who writes what, who reads what
 
@@ -182,6 +182,7 @@ workspace/store/
       files/                # exports, weights (artifacts)
     20261124-093000-core.ingest-p2x1/
       run.json  media.parquet  frames.parquet
+  tmp/                      # runs being written; renamed into runs/ when complete
   judgments/
     20261124-160212-nic.parquet   # one file per judging session, never edited
   frames/                   # cache of decoded frame images (D-29): safe to delete

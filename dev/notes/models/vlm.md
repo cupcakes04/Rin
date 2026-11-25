@@ -55,7 +55,8 @@ Full notes: `dev/rin_v1/docs/notes/services/qwen/qwen_install.md`.
 | `CUDA error: operation not supported when stream is capturing` | `enforce_eager=True` |
 | FlashInfer sampler fails to compile | `export VLLM_USE_FLASHINFER_SAMPLER=0` |
 | `KV cache is needed, which is larger than available` | Cap `max_model_len` and frames per request |
-| `start a new process before current process finished bootstrapping` | Guard the entry point with `if __name__ == "__main__":` |
+| Silent deadlock at start-up | `export VLLM_WORKER_MULTIPROC_METHOD=spawn` (set before launch, with the two flags above) |
+| `start a new process before current process finished bootstrapping` | Caused by `spawn` above: guard the entry point with `if __name__ == "__main__":` |
 | Tokenizer `AttributeError` (`all_special_tokens_extended`) | `transformers` version drift: keep vLLM in its own environment |
 
 ## How Rin uses VLMs

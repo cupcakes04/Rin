@@ -25,7 +25,7 @@ flowchart TB
 
 | Step | What | Notes |
 |---|---|---|
-| 1 Cheap filters | Frame difference or optical flow below a noise floor; variance of the Laplacian (blur); histogram clipped at either end (exposure) | From v1's sampling notes. On idle CCTV this removes most frames. CPU only |
+| 1 Cheap filters | Frame difference or optical flow below a noise floor; variance of the Laplacian (blur); histogram clipped at either end (exposure) | From v1's sampling notes ([stream](../../rin_v1/docs/notes/prefilter_sampling/fiter_raw_stream_tier123.md), [static images](../../rin_v1/docs/notes/prefilter_sampling/static_images_sampling.md)); the stream note scores motion on a 320×180 copy to keep it cheap. On idle CCTV this removes most frames. CPU only |
 | 2 Embed | DINOv3 CLS (maybe mean patch) per kept frame | On a fixed camera this may be the wrong signal (§4) |
 | 3 De-duplicate | Drop frames too similar to one already kept | |
 | 4 Select | Spend budget N for coverage of the embedding space | Methods in §3 |
@@ -46,7 +46,7 @@ flowchart LR
 ```
 
 - **Random in time:** the baseline.
-- **Farthest-point:** repeatedly pick the frame farthest from everything already picked. It maximises coverage but loves outliers: a glitch or a blurred frame is "far" from everything, which is why the step 1 filters come first.
+- **Farthest-point:** repeatedly pick the frame farthest from everything already picked. It maximises coverage but loves outliers: a glitch or a blurred frame is "far" from everything, which is why the step 1 filters come first. v1's notes start it from a "high-energy" frame (not defined there; most motion is one reading) rather than a random one. A fixed start makes all seeds pick the same list, so the seed would then only vary the student's training.
 - **Cluster-stratified:** k-means, then an equal number of frames from each cluster, sampled *within* the clusters, because picking only centroids favours the most generic frames.
 - **Uncertainty:** frames the current student scores at middling confidence, or where it disagrees with SAM3.
 
@@ -76,12 +76,13 @@ This is the most likely place the idea fails at first, and the most interesting 
 |---|---|
 | Class | person |
 | Student | YOLO; one size fixed for the whole experiment (fallback RF-DETR) |
-| Pool | MEVA school site, cameras G299 and G330, 2018-03-07, one continuous hour ([../data.md](../data.md)) |
+| Pool | MEVA school site, cameras G299 and G330, 2018-03-07, one continuous hour ([../data.md](../heavy_data.md)) |
 | Test set | Same cameras, **another day** (2018-03-09). Its SAM3 labels are checked by a person before any experiment runs, and selection never touches it (D-13) |
+| Val set | A few whole recordings held out from the pool day, SAM3 labels unchecked; only picks each student's checkpoint (D-31) |
 
 ## 6. Known risks
 
-- **Pseudo-label noise.** SAM3 misses objects, and a missed person in a training frame teaches the student "background". Remedy: reject whole frames or spans (judgments).
+- **Pseudo-label noise.** SAM3 misses objects, and a missed person in a training frame teaches the student "background". Remedy: reject whole frames or spans (judgments). A signal for where to look that needs no person (the user's idea, from v1's [sampling note](../../rin_v1/docs/notes/prefilter_sampling/static_images_sampling.md), Stage 3): propagate SAM3's masks from frame t to t+1 and compare them with a fresh segmentation of t+1; a sharp IoU drop on a still camera flags an unstable label. Costs a second SAM3 pass per checked frame.
 - **Small people.** MEVA cameras are wide and far away, so SAM3 may miss distant people unless frames are tiled. Measure on the test set before blaming selection.
 - **Leakage.** Never split by frame (D-13).
 - **Cost.** SAM3 time per frame limits the budgets we can afford. Measure it early.

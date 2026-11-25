@@ -1,0 +1,22 @@
+[project]
+name = "rin"
+version = "0.1.0"
+description = "Raw video in, curated and checked labels out, small student models trained on them."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "av>=14",          # PyAV: decodes video to read every frame's timestamp
+    "duckdb>=1.2",     # SQL over the store's Parquet files
+    "numpy>=2",
+    "pandas>=2.2",     # .df() on query results, for notebooks
+    "pyarrow>=18",     # writes and checks Parquet tables
+]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["uv_build>=0.12,<0.13"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["dev/tests"]

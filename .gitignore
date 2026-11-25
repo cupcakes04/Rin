@@ -1,2 +1,5 @@
 dev/rin_v1/
 workspace/
+__pycache__/
+.venv/
+.pytest_cache/
