@@ -6,8 +6,10 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "av>=14",          # PyAV: decodes video to read every frame's timestamp
     "duckdb>=1.2",     # SQL over the store's Parquet files
+    "jaxtyping>=0.3",  # array shapes in type hints (works on numpy; no JAX)
     "numpy>=2",
     "pandas>=2.2",     # .df() on query results, for notebooks
+    "pillow>=11",      # writes the frame cache's JPEGs
     "pyarrow>=18",     # writes and checks Parquet tables
 ]
 

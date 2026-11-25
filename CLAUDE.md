@@ -14,7 +14,7 @@ flowchart LR
     B["User writes freely<br/>dev/notes/brainstorms/brainstorm.md"] --> I["Agent ingests: judges honestly,<br/>discusses in chat, files points into<br/>ideas/ · decisions.md · direction.md"]
     I --> A["User reads decisions,<br/>answers Proposed / Open,<br/>checks direction"]
     A --> M["Next milestone<br/>(planned one ahead)"]
-    M --> X["Agent builds · user runs GPU steps"]
+    M --> X["Agent builds and runs<br/>(CPU and GPU) · user checks"]
     X --> S["dev/notes/state.md<br/>handoff"]
     S --> B
 ```
@@ -26,12 +26,15 @@ flowchart LR
    - file each point under `dev/notes/`;
    - add a dated `processed_*.md` (where each point went) and a `raw_*.md` (the user's text) to `dev/notes/brainstorms/`;
    - empty the inbox.
-3. Confirm the next step with the user before coding.
+3. If an `audit_*.md` is in `dev/notes/brainstorms/`, ingest it the same way: verify each finding against the code before accepting it, file it or reject it with a reason in the `processed_*.md`, then delete the report (git keeps it).
+4. Confirm the next step with the user before coding.
 
 **Session end:**
 1. Rewrite `dev/notes/state.md`: done, next, waiting on the user.
 2. Update the decisions, ideas and milestone file the work touched.
 3. Compact: delete what no longer holds.
+
+**Audits:** after a milestone, the user may give [dev/audit.md](dev/audit.md) to an outside agent, on purpose another model, in a fresh session. It reads widely and writes one report to the brainstorms folder. Breadth over precision by design: the engineering session verifies each finding at ingest. The prompt stays short so the engineer doesn't frame the auditor; the agent never runs an audit itself.
 
 **Inbox vs chat:** the inbox is for big things: new intent, new ideas, changes of direction. Day-to-day milestone work (questions, feedback, small calls) happens in chat as usual, and follows the same loop on a smaller scale.
 
@@ -54,9 +57,10 @@ flowchart TB
 | [dev/notes/README.md](dev/notes/README.md) | Map of the working notes and reading order |
 | [dev/notes/state.md](dev/notes/state.md) | **Handoff:** where we are, what's next, what waits on the user |
 | [dev/notes/brainstorms/brainstorm.md](dev/notes/brainstorms/brainstorm.md) | **The user's inbox** |
-| `dev/notes/` (rest) | direction, decisions, ideas, milestones (one folder per running milestone), models, data, lessons: see [dev/notes/README.md](dev/notes/README.md) |
+| `dev/notes/` (rest) | direction, decisions, ideas, milestones (`README.md` index with parked debt, one file per running milestone), models, data, lessons: see [dev/notes/README.md](dev/notes/README.md) |
 | `dev/research/` | Experiment write-ups: the question, the run ids, small result tables and plots, the verdict. Raw runs stay in `workspace/store/` |
 | `dev/scripts/` | Small runnable helpers (e.g. `pull_meva.sh`) |
+| [dev/audit.md](dev/audit.md) | The short prompt for an outside audit (see "Audits" above) |
 | `dev/tests/` | Tests (from M1) |
 | `dev/rin_v1/` | Old repo, read-only reference, gitignored (see "Using rin_v1") |
 | `docs/` | The repo's real documentation for someone using Rin: installation, usage. Starts in M1, when there is something to install |
@@ -77,7 +81,7 @@ The root stays at `CLAUDE.md`, `dev/`, `docs/`, `src/`, `vendors/`, `workspace/`
 ## Using rin_v1
 `dev/rin_v1/` is a source of **facts**, not code to port (D-18).
 - **When:** at the start of each milestone, read the parts of v1 that the milestone touches: the "Worth reading" table in [dev/notes/lessons/rin_v1.md](dev/notes/lessons/rin_v1.md), plus the matching `dev/rin_v1/docs/notes/` and v1 source.
-- **What to take:** gotchas, working settings, label lists and test cases go to [dev/notes/models/](dev/notes/models/README.md) or the milestone folder. Code is written fresh, organised modularly (D-18); nothing is copied.
+- **What to take:** gotchas, working settings, label lists and test cases go to [dev/notes/models/](dev/notes/models/README.md) or the milestone file. Code is written fresh, organised modularly (D-18); nothing is copied.
 - **Never:** import from `rin_v1`, or copy its structure (pillars, contracts, Master/Recorder/Servant classes, staging).
 - **Attitude:** respect v1 as a predecessor as it already paid for its lessons,. Within the parts the milestone touches, don't skip v1 to stay "unbiased", missing a lesson v1 already learned costs more than reading too much. The bias to avoid is in decisions: take v1's *reasons* (the bug or constraint behind a choice), then decide fresh.
 
@@ -86,12 +90,14 @@ The root stays at `CLAUDE.md`, `dev/`, `docs/`, `src/`, `vendors/`, `workspace/`
 - **No sycophancy, no pedantry.** Give the honest view, including "this won't work".
 - **Ask, don't guess.** If a request is ambiguous, ask one short question with a recommended answer.
 - **Diagrams.** Rin is a flow-based design: use mermaid diagrams in docs wherever a flow, a loop or a structure is involved.
-- **Flag debt.** Name every shortcut and its later cost, and record it in the milestone file.
+- **Flag debt.** Name every shortcut and its later cost. Two kinds:
+  - **To fix:** a real flaw the work will hit. Goes in the running milestone file and is fixed before the milestone closes.
+  - **Parked:** fine to leave until something specific happens. Goes in [dev/notes/milestones/README.md](dev/notes/milestones/README.md#parked-debt) with its **trigger** (the event that makes it worth doing); each milestone start checks the triggers.
 - **Fail loudly.** No bare `except`, no silent fallbacks, no defaults that hide a missing input.
 - **No unmeasured claims.** No speed or accuracy numbers in docs unless measured here.
 - **Current truth only.** Rewrite docs in place. No changelogs, "superseded by" notes or ticked-off lists. Git keeps history.
 - **No bloat.** No copied model cards (link them, record only what they leave out), no empty placeholder files, no plans more than one milestone ahead.
 - **Relative links** in docs.
 - **The user runs git** (add, commit, push). The agent may read with status/diff/log.
-- **The user runs GPU work.** The agent hands it over as numbered copy-paste steps, each saying what pass and fail look like and what to send back on failure. The agent may run CPU-only checks itself.
+- **The agent may run GPU work** (the user's call, 2026-11-25). Check the GPU is free first (`nvidia-smi`), run one GPU job at a time, and report what ran and what it measured. What needs the user's eyes (judging frames, a viewer) is handed over as numbered steps, each saying what pass and fail look like.
 - **Hardware:** one RTX 4070 Ti SUPER (16 GB), WSL2.

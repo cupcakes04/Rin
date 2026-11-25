@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 from conftest import (
     CFR_STARTS_MS,
+    GRAY_STEP,
     VFR_STARTS_MS,
     decoded_gray_ids,
     make_avi_with_bframes,
@@ -17,7 +18,7 @@ from conftest import (
     make_noisy_avi,
 )
 
-from rin.media import frame_on_screen, probe, sample_frames
+from rin.media import frame_on_screen, probe, read_frames, sample_frames
 
 # --- time -> frame ---------------------------------------------------------------------------
 
@@ -112,3 +113,45 @@ def test_probe_refuses_unknown_suffix(tmp_path: Path) -> None:
 def test_probe_refuses_missing_file(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         probe(tmp_path / "nope.mp4")
+
+
+# --- read_frames -----------------------------------------------------------------------------
+
+
+def _gray_id(pixels: np.ndarray) -> int:
+    return round(float(pixels[0, 0, 0]) / GRAY_STEP)
+
+
+def test_read_frames_hands_over_the_frames_probe_numbered(tmp_path: Path) -> None:
+    """On a B-frame AVI the k-th frame read is the k-th frame shown, as probe counts them."""
+    path = make_avi_with_bframes(tmp_path / "b.avi", 20, rate=10)
+    got = list(read_frames(path, [0, 3, 7, 19]))
+    assert [i for i, _ in got] == [0, 3, 7, 19]
+    assert [_gray_id(px) for _, px in got] == [0, 3, 7, 19]
+    assert got[0][1].shape == (64, 64, 3) and got[0][1].dtype == np.uint8
+
+
+def test_read_frames_scales_while_converting(tmp_path: Path) -> None:
+    path = make_clip(tmp_path / "cfr.mkv", CFR_STARTS_MS, rate=10)
+    (_, pixels), = read_frames(path, [5], size=(32, 16))
+    assert pixels.shape == (16, 32, 3) and _gray_id(pixels) == 5
+
+
+def test_read_frames_reads_an_image(tmp_path: Path) -> None:
+    (i, pixels), = read_frames(make_image(tmp_path / "x.jpg"), [0])
+    assert i == 0 and pixels.shape == (32, 48, 3)
+    with pytest.raises(ValueError, match="only frame is 0"):
+        list(read_frames(tmp_path / "x.jpg", [1]))
+
+
+@pytest.mark.parametrize(("wanted", "error"), [([3, 1], "strictly increasing"), ([], "non-empty"), ([-1], "non-negative")])
+def test_read_frames_refuses_bad_frame_lists(tmp_path: Path, wanted: list[int], error: str) -> None:
+    path = make_clip(tmp_path / "cfr.mkv", CFR_STARTS_MS, rate=10)
+    with pytest.raises(ValueError, match=error):
+        list(read_frames(path, wanted))
+
+
+def test_read_frames_past_the_end_is_an_error(tmp_path: Path) -> None:
+    path = make_clip(tmp_path / "cfr.mkv", CFR_STARTS_MS, rate=10)
+    with pytest.raises(ValueError, match="wanted frame 99, but the decoder returned only 16"):
+        list(read_frames(path, [2, 99]))

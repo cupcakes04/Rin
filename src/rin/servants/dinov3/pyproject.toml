@@ -1,0 +1,25 @@
+# The DINOv3 job's own environment (D-07): job.py runs here, the caller in the core env.
+# Created on the first `dinov3.embed` call, or by hand: uv sync --project src/rin/servants/dinov3
+[project]
+name = "rin-dinov3-job"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "numpy>=2",
+    "pillow>=11",
+    "torch==2.14.1",          # the CUDA 13.0 build, from the index below
+    "torchvision==0.29.1",    # needed by DINOv3's fast image processor
+    "transformers>=5.20",     # DINOv3 support
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu130" }
+torchvision = { index = "pytorch-cu130" }
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true

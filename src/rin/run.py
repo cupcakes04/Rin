@@ -6,6 +6,8 @@ import json
 from typing import TYPE_CHECKING, Any
 
 import duckdb
+import numpy as np
+from jaxtyping import Float
 
 from rin.store.schema import TABLES
 
@@ -47,6 +49,20 @@ class Run:
 
     def frame_set(self) -> duckdb.DuckDBPyRelation:
         return self.table("frame_sets")
+
+    def frame_scores(self) -> duckdb.DuckDBPyRelation:
+        return self.table("frame_scores")
+
+    def embeddings(self) -> duckdb.DuckDBPyRelation:
+        """Which frame (and kind) each row of `vectors()` belongs to."""
+        return self.table("embeddings")
+
+    def vectors(self) -> Float[np.ndarray, "rows dim"]:
+        """The run's embeddings.npy, read lazily from disk. Row r belongs to the `embeddings`
+        row whose `row` is r."""
+        if "embeddings" not in self.tables:
+            raise TypeError(f"Run {self.id} wrote no embeddings (it wrote {self.tables})")
+        return np.load(self._m.layout.run_dir(self.id) / "embeddings.npy", mmap_mode="r")
 
     def __len__(self) -> int:
         """Number of frames, for a run that wrote a frame set."""

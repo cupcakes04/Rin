@@ -66,7 +66,13 @@ class RunWriter:
         model: str | None = None,
         checkpoint: str | None = None,
         checkpoint_sha256: str | None = None,
+        who: str | None = None,
     ) -> None:
+        """who: the person behind the run. Left out, it is the login user, which is right for
+        any step the user starts; a step carrying someone else's work (their clicks, their
+        drawn boxes) passes that person."""
+        if who is not None and (not isinstance(who, str) or not who.strip()):
+            raise ValueError(f"who must be a non-empty string, got {who!r}")
         self.layout = layout
         self.started_at = datetime.now()
         self.run_id = new_run_id(step, self.started_at)
@@ -80,7 +86,7 @@ class RunWriter:
             "inputs": list(inputs),
             "tags": tags or {},
             "code": code_version(),
-            "who": getpass.getuser(),
+            "who": getpass.getuser() if who is None else who,
             "started_at": self.started_at.isoformat(),
             "finished_at": None,
         }
@@ -101,6 +107,14 @@ class RunWriter:
         table = table.add_column(0, "run_id", pa.array([self.run_id] * len(table), pa.string()))
         pq.write_table(table.cast(stored_schema(name)), self.tmp_dir / f"{name}.parquet")
         self.written.append(name)
+
+    def add_provenance(self, *, checkpoint: str | None = None, **code: str) -> None:
+        """What a job reports about itself after it ran: the exact checkpoint revision, and the
+        versions of the libraries it used (they live in the job's environment, not this one)."""
+        if checkpoint is not None:
+            self.info["checkpoint"] = checkpoint
+        self.info["code"].update(code)
+        json.dumps(self.info)
 
     def __exit__(
         self,

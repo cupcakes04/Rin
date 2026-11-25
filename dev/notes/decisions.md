@@ -39,7 +39,7 @@ flowchart LR
 
 **D-19 · Milestones are planned one ahead.** Only the next milestone gets a detailed file; later ones stay one line each and are reshaped by what we learn. *Why:* v1's plans ballooned before the first loop ran.
 
-**D-07 · Servants run as batch jobs, not daemons.** A job runs in its model's environment, reads inputs from disk, writes its run to disk and exits, which frees the VRAM. No ports, no PM2, no VRAM governor. A long-lived process only for an interactive need (e.g. SAM3 clicks, VLM chat), and only when that need arrives. *Why:* v1's stale SAM3 prompts (CR-25) and governor races came from long-lived services.
+**D-07 · Servants run as batch jobs, not daemons.** A job runs in its model's environment, reads a spec and cached frames from disk, writes its raw outputs (arrays, plain files) into the run's temporary folder and exits, which frees the VRAM. The caller in the core environment opened that folder, and afterwards builds the tables, checks them against the schema and files the run (D-23); the job never imports Rin, so model environments don't inherit the core's package versions. No ports, no PM2, no VRAM governor. A long-lived process only for an interactive need (e.g. SAM3 clicks, VLM chat), and only when that need arrives. *Why:* v1's stale SAM3 prompts (CR-25) and governor races came from long-lived services.
 
 **D-08 · Records are stored as Parquet and queried with DuckDB; features go in plain array files.** *Why:* v1's JSON catalog took 2.35 s per commit at 250k records, and SQL replaces its five hand-written indexes.
 

@@ -1,6 +1,6 @@
 # Installing Rin
 
-Rin runs on Linux (developed on WSL2 with one 16 GB GPU). This page sets up the **core environment**: the store, ingest and sampling. Each model (SAM3, DINOv3, YOLO, …) gets its own separate environment, added to this page when its servant is built.
+Rin runs on Linux (developed on WSL2 with one 16 GB GPU). This page sets up the **core environment** (the store, ingest, sampling, curation) and, in section 6, the DINOv3 environment. Each model gets its own separate environment, added to this page when its servant is built.
 
 ## What you need first
 
@@ -66,3 +66,15 @@ m.sql("SELECT camera, count(*) AS clips, sum(n_frames) AS frames FROM media GROU
 ```
 
 Ingesting the 24 pool clips decodes every frame once, which took about 100 s on this machine. Everything Rin writes goes to `workspace/store/`; deleting that folder starts over. What each call does, and the rules behind it: [core.md](core.md).
+
+## 6. The DINOv3 environment (GPU)
+
+`dinov3.embed` runs its model in a separate environment, defined in `src/rin/servants/dinov3/pyproject.toml` (PyTorch built for CUDA 13.0, `transformers`). The first `embed` call creates it; to create it ahead of time:
+
+```bash
+uv sync --locked --project src/rin/servants/dinov3
+```
+
+Check: `src/rin/servants/dinov3/.venv/bin/python -c "import torch; print(torch.cuda.is_available())"` prints `True`. If it prints `False`, the NVIDIA driver doesn't support CUDA 13.0; `nvidia-smi` shows the version it supports.
+
+The weights load from the Hugging Face cache. DINOv3 is gated: accept its licence on the [model page](https://huggingface.co/facebook/dinov3-vitl16-pretrain-lvd1689m), run `hf auth login` once, then `hf download facebook/dinov3-vitl16-pretrain-lvd1689m`.

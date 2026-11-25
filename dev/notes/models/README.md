@@ -48,6 +48,15 @@ One environment per servant when dependencies clash, and they do: BoxMOT was on 
 ## Known gotchas
 
 - **Sapiens2 weights come twice per HF repo:** `model.safetensors` (for `transformers`) and `sapiens2_<size>_<task>.safetensors` (for the vendor repo's standalone loader), about 6 GB each at 1B. Download only the first, naming the files: `hf download facebook/sapiens2-<task>-1b config.json preprocessor_config.json model.safetensors`. A multi-name `--include` silently dropped `config.json` here. Pose is top-down: pass person boxes as COCO `(x, y, w, h)` in pixels, and the processor crops. v1's Sapiens 1 `torch.export` problem doesn't apply.
+- **DINOv3 input size:** the HF preprocessor squashes every image to 224×224 unless given `size={"height": h, "width": w}`. The model itself takes any size that is a multiple of 16 (rotary position embeddings, `rope_theta` in its config, are computed for whatever patch grid arrives; no fixed position table). Checked here on ViT-L/16 at 224×224, 448×256 and 1920×1088 (1080 padded to 1088): `last_hidden_state` has 1 + 4 + (h/16)(w/16) tokens. Rin's default is 896×512: a person 100 px tall at 1080p spans about 3 patches (1 at 224), at a sixth of native's cost. Speed here, ViT-L/16, float32 weights under float16 autocast, model only:
+
+  | Input | Frames/s | Peak VRAM |
+  |---|---|---|
+  | 224×224 | ~315 | 1.6 GiB |
+  | 448×256 | ~139 | 1.7 GiB |
+  | 896×512 | ~32 (31.5 end to end from cached JPEGs) | 3.2 GiB |
+  | 1920×1088 | ~5 | 2.3 GiB |
+- **DINOv3 precision:** weights loaded as float16 overflow inside the network and every output is NaN (measured here on ViT-L/16: all 14,198 pool vectors). Load float32 weights and run under `torch.autocast("cuda", dtype=torch.float16)`: it matches float32 (cosine 1.0000) at about 3× float32's speed. That was v1's setting (`dino3/engine.py`); bfloat16 weights also work (cosine 0.9998), about 25% faster.
 - **DINOv3 register tokens:** `last_hidden_state` is `[CLS, register tokens, patch tokens]`. Strip the registers before averaging patches or reshaping them into a 2-D grid, or the features are quietly wrong (mean) or the reshape fails. Read the count from `model.config.num_register_tokens`; v1 hard-coded positions `1:5` (4 registers) in `dev/rin_v1/src/rin/services/extract/dino3/engine.py` (`_clean_tokens`).
 - **SAM3 (v1 CR-25):** a long-lived SAM3 process kept the previous job's prompts. Batch jobs (D-07) avoid this by design.
 - **SAM3 object limits, for crowded CCTV (about 30 people per scene):** per-image detection has 200 queries (`num_queries=200` in the vendored `model_builder.py`), so a crowded frame fits; the holy grail only uses per-frame detection. Tracking is different: SAM 3.1 multiplex tracks at most `EngineConfig.multiplex_max_num_objects` objects (default 16), and both video sessions use more VRAM per tracked object. Matters for [tracker tuning](../ideas/tracker_tuning.md); not measured here yet.

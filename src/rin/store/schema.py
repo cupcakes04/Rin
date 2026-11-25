@@ -33,7 +33,22 @@ TABLES: dict[str, pa.Schema] = {
         pa.field("frame_idx", pa.int64(), nullable=False),
         pa.field("rank", pa.int64()),                           # order of preference, or null
     ]),
+    "frame_scores": pa.schema([                                 # long: one row per score
+        pa.field("media_id", pa.string(), nullable=False),
+        pa.field("frame_idx", pa.int64(), nullable=False),
+        pa.field("name", pa.string(), nullable=False),          # motion, blur, dark, bright
+        pa.field("value", pa.float64(), nullable=False),
+    ]),
+    "embeddings": pa.schema([                                   # index into the run's embeddings.npy
+        pa.field("row", pa.int64(), nullable=False),            # row in embeddings.npy
+        pa.field("media_id", pa.string(), nullable=False),
+        pa.field("frame_idx", pa.int64(), nullable=False),
+        pa.field("instance_idx", pa.int64()),                   # null: a whole-frame vector
+        pa.field("kind", pa.string(), nullable=False),          # cls | mean_patch | box_pooled
+    ]),
 }
+
+EMBEDDING_KINDS = ("cls", "mean_patch", "box_pooled")
 
 RUN_ID_FIELD = pa.field("run_id", pa.string(), nullable=False)
 
@@ -75,8 +90,9 @@ def conform(name: str, table: pa.Table) -> pa.Table:
         if not field.nullable and table.column(field.name).null_count:
             raise ValueError(f"Table {name!r}: column {field.name!r} has nulls")
     table = table.select(schema.names).cast(schema)
-    if name == "media":
-        bad = pc.invert(pc.is_in(table.column("kind"), pa.array(["video", "image"])))
+    allowed = {"media": ("video", "image"), "embeddings": EMBEDDING_KINDS}.get(name)
+    if allowed is not None and len(table):
+        bad = pc.invert(pc.is_in(table.column("kind"), pa.array(allowed)))
         if pc.any(bad).as_py():
-            raise ValueError("Table 'media': kind must be 'video' or 'image'")
+            raise ValueError(f"Table {name!r}: kind must be one of {allowed}")
     return table

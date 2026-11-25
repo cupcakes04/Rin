@@ -44,6 +44,24 @@ def test_a_failed_run_leaves_nothing(m: Master) -> None:
     assert not any(m.layout.tmp.iterdir())
 
 
+def test_who_is_the_login_user_unless_passed(m: Master) -> None:
+    with m.writer(step="test.step", config={}, inputs=[]) as default:
+        default.write("frame_sets", _frame_set())
+    with m.writer(step="test.step", config={}, inputs=[], who="annotator_a") as passed:
+        passed.write("frame_sets", _frame_set())
+    who = dict(m.sql("SELECT run_id, who FROM runs").fetchall())
+    assert who[passed.run_id] == "annotator_a" and who[default.run_id] not in ("", "annotator_a")
+    with pytest.raises(ValueError, match="who"):
+        m.writer(step="test.step", config={}, inputs=[], who=" ")
+
+
+def test_views_see_runs_written_after_the_store_was_opened(m: Master) -> None:
+    for n in (2, 3, 4):
+        with m.writer(step="test.step", config={}, inputs=[]) as w:
+            w.write("frame_sets", _frame_set(n))
+        assert m.sql("SELECT count(*) FROM frame_sets").fetchall()[0] == (sum(range(2, n + 1)),)
+
+
 def test_opening_a_store_warns_about_leftover_run_folders(m: Master) -> None:
     """A run killed hard never reaches __exit__, so its temporary folder stays behind."""
     (m.layout.tmp / "20260101-000000-core.ingest-dead").mkdir()

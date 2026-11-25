@@ -25,7 +25,7 @@ flowchart TB
 
 | Step | What | Notes |
 |---|---|---|
-| 1 Cheap filters | Frame difference or optical flow below a noise floor; variance of the Laplacian (blur); histogram clipped at either end (exposure) | From v1's sampling notes ([stream](../../rin_v1/docs/notes/prefilter_sampling/fiter_raw_stream_tier123.md), [static images](../../rin_v1/docs/notes/prefilter_sampling/static_images_sampling.md)); the stream note scores motion on a 320×180 copy to keep it cheap. On idle CCTV this removes most frames. CPU only |
+| 1 Cheap filters | Frame difference or optical flow below a noise floor; variance of the Laplacian (blur); histogram clipped at either end (exposure) | From v1's sampling notes ([stream](../../rin_v1/docs/notes/prefilter_sampling/fiter_raw_stream_tier123.md), [static images](../../rin_v1/docs/notes/prefilter_sampling/static_images_sampling.md)); the stream note scores motion on a 320×180 copy to keep it cheap. CPU only. On MEVA's busy gym hour it removes little: motion ≥ 0.002 (below that the gym is empty) keeps 98%, and no frame is blurred or badly exposed (M2). Idle footage would lose far more |
 | 2 Embed | DINOv3 CLS (maybe mean patch) per kept frame | On a fixed camera this may be the wrong signal (§4) |
 | 3 De-duplicate | Drop frames too similar to one already kept | |
 | 4 Select | Spend budget N for coverage of the embedding space | Methods in §3 |
@@ -64,6 +64,10 @@ flowchart LR
     B --> E
 ```
 
+Measured in M2 ([research](../../research/m2_filters_dedupe/README.md)): two random frames of one camera have a median whole-frame cosine of 0.95, so the background does dominate. One person crossing an empty gym moves the vector by 0.006.
+
+Actor features, in order to try: (1) remove each camera's mean vector; (2) patch tokens minus the camera's mean patch grid, pooled where they differ (no detector, no class). Ruled out for selection: SAM3 (circular: it is the teacher being budgeted), Sapiens2 (built for pose, heavy). Stock YOLO boxes are possible but messy, and miss the small, occluded people most worth labelling.
+
 This is the most likely place the idea fails at first, and the most interesting one to get right. A first negative result means "try §4", not "the idea failed".
 
 ## 5. The proof
@@ -85,6 +89,7 @@ This is the most likely place the idea fails at first, and the most interesting 
 - **Pseudo-label noise.** SAM3 misses objects, and a missed person in a training frame teaches the student "background". Remedy: reject whole frames or spans (judgments). A signal for where to look that needs no person (the user's idea, from v1's [sampling note](../../rin_v1/docs/notes/prefilter_sampling/static_images_sampling.md), Stage 3): propagate SAM3's masks from frame t to t+1 and compare them with a fresh segmentation of t+1; a sharp IoU drop on a still camera flags an unstable label. Costs a second SAM3 pass per checked frame.
 - **Small people.** MEVA cameras are wide and far away, so SAM3 may miss distant people unless frames are tiled. Measure on the test set before blaming selection.
 - **Leakage.** Never split by frame (D-13).
+- **Thresholds don't travel.** M2's numbers (motion ≥ 0.002, cosine 0.99) fit this gym, this model and this input size; another camera or model shifts them. What transfers is a rule set *relative to each stream*: a cut-off taken from the stream's own distribution (e.g. drop frames closer than a typical 0.5 s neighbour), vectors with the camera's mean removed, or a budget instead of a threshold. The fully general signal comes in round 2: the student's own uncertainty is defined by the model being trained, not by the footage. A VLM fits semantic filters ("frames with someone carrying a box", [search.md](search.md)), not near-duplicate removal.
 - **Cost.** SAM3 time per frame limits the budgets we can afford. Measure it early.
 
 ## 7. Later

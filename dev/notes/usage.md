@@ -47,14 +47,15 @@ sequenceDiagram
     NB->>C: sam3.concept(m, frames, prompts=...)
     C->>C: check every argument, fail loudly
     C->>D: write frame images not yet cached
-    C->>D: write job spec (inputs + config)
+    C->>D: open the run's tmp folder, write the job spec into it
     C->>J: uv run in the SAM3 env (blocks)
-    J->>D: read frames, run sam3_engine, write run folder, rename = done
+    J->>D: read spec + frames, run sam3_engine, write raw outputs into the tmp folder
     J-->>C: exit code 0
+    C->>D: build tables, check them, rename into runs/ = done
     C-->>NB: Run
 ```
 
-The caller has the real signature (so your editor autocompletes it and a typo fails before the GPU starts) but imports no model code. The job imports the vendor API and nothing from the notebook. Rule steps (`core`, `curate`, `export`) run in the core environment directly.
+The caller has the real signature (so your editor autocompletes it and a typo fails before the GPU starts) but imports no model code. The job imports the vendor API and nothing from Rin (D-07). Rule steps (`core`, `curate`, `export`) run in the core environment directly.
 
 ---
 
@@ -99,7 +100,7 @@ pool.frames()         # about 216k rows: (media_id, frame_idx, pts)
 ### A2 · Sample frames
 
 ```python
-frames = core.sample(m, pool, fps=2)          # placeholder: M2 checks 1 vs 2 fps
+frames = core.sample(m, pool, fps=2)          # 2 fps keeps 28-39% more after dedupe than 1 fps (M2)
 len(frames)                                   # 14,424 (2 cameras × 3600 s × 2)
 ```
 
@@ -110,14 +111,14 @@ len(frames)                                   # 14,424 (2 cameras × 3600 s × 2
 ### A3 · Cheap filters: score once, decide cheaply
 
 ```python
-scores = curate.score_frames(m, frames, ["motion", "blur", "dark", "bright"])   # CPU, low-res decode
-scores.histograms()                                                             # look before choosing
+scores = curate.score_frames(m, frames, ["motion", "blur", "dark", "bright"])   # CPU, 320-wide copy
+scores.frame_scores().df().groupby("name")["value"].describe()                  # look before choosing
 
-kept = curate.keep(m, scores, where="motion >= 0.01 AND blur >= 80 AND dark < 0.5 AND bright < 0.5")  # placeholders: M2
-len(kept)
+kept = curate.keep(m, scores, where="motion >= 0.002")
+len(kept)                                                                       # 14,198 of 14,424
 ```
 
-- **What:** `score_frames` measures each frame (frame difference, variance of the Laplacian, clipped histogram ends) and stores the numbers. `keep` applies thresholds to the stored numbers and writes the survivors as a new frame set.
+- **What:** `score_frames` measures each frame (frame difference, variance of the Laplacian, clipped histogram ends; definitions in `curate.SCORES`) and stores the numbers. `keep` applies thresholds to the stored numbers and writes the survivors as a new frame set.
 - **Why:** scoring decodes video and is slow; choosing a threshold is a query and takes no time. Splitting them means you can try five thresholds without decoding again (D-26). The `where` text is saved in the run, so the threshold is never lost.
 - **Without it:** idle CCTV fills the selection with empty, identical frames, and farthest-point selection picks blurred glitches because they look "far" from everything ([holy_grail §3](ideas/holy_grail.md#3-selection-methods-to-compare)).
 
@@ -127,13 +128,14 @@ len(kept)
 emb = dinov3.embed(
     m, kept,
     model="facebook/dinov3-vitl16-pretrain-lvd1689m",
+    size=(896, 512),              # (width, height), multiples of 16; keeps 16:9 (M2)
     what=["cls"],                 # D-14: no patch grids by default
-    batch_size=32,                # placeholder: M2 measures what fits in 16 GB
+    batch_size=32,
 )
 emb.vectors().shape               # (len(kept), 1024)
 ```
 
-- **What:** a batch job in the DINOv3 environment: one vector per frame, saved as an array file plus an index table.
+- **What:** a batch job in the DINOv3 environment: one vector per frame, saved as an array file plus an index table. The frames are resized to 896×512, not the preprocessor's default 224×224 square, so people stay about three patches tall ([models](models/README.md#known-gotchas)).
 - **Why:** selection needs a sense of "how different are these two frames"; distance between embeddings is that sense.
 - **Without it:** the only selection left is random. Note the risk: on a fixed camera whole-frame vectors may barely differ ([holy_grail §4](ideas/holy_grail.md#4-the-main-risk-fixed-cameras)). Then `what=["box_pooled"]` with person boxes is the next try, and the rest of the notebook doesn't change.
 - **Why DINOv3 and not EmbeddingGemma 2:** they measure different kinds of "different". DINOv3 learned from images alone, so its distance tracks what the picture looks like: where people stand, how big, how lit, how occluded. That is what a person detector has to learn. EmbeddingGemma learned to match images to text, so its distance tracks what you would *say* about a frame. "A schoolyard with people" describes most of the pool, so many frames a detector would find different could come out close together. That is a reasoned guess, not a measurement. Gemma's real strength is text search ("people carrying boxes", [search.md](ideas/search.md)), which comes after the holy grail.
@@ -142,11 +144,11 @@ emb.vectors().shape               # (len(kept), 1024)
 ### A5 · De-duplicate
 
 ```python
-cands = curate.dedupe(m, kept, emb, cosine_max=0.95)    # placeholder: M2
-len(cands)
+cands = curate.dedupe(m, kept, emb, cosine_max=0.99)
+len(cands)                                              # 4,453
 ```
 
-- **What:** walks the frames in time order and drops any frame too similar to one already kept.
+- **What:** walks each camera's frames in time order and drops a frame too similar to the last kept one. On MEVA, 0.99 drops near-copies; 0.98 already drops frames where people moved, because the gym dominates whole-frame vectors ([research](../research/m2_filters_dedupe/README.md)).
 - **Why:** removes the remaining near-copies (a person standing still for a minute), so selection spends its budget on different moments.
 - **Without it:** coverage methods still work, but random selection gets weaker for an uninteresting reason, and the comparison gets noisier.
 

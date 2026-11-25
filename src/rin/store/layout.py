@@ -25,8 +25,20 @@ class Layout:
         """Runs being written. On the same disk as runs/, so the final rename is one step."""
         return self.root / "tmp"
 
+    @property
+    def frames(self) -> Path:
+        """The frame cache (D-29): decoded frames as JPEGs. Derived data, safe to delete."""
+        return self.root / "frames"
+
     def run_dir(self, run_id: str) -> Path:
         return self.runs / run_id
+
+    def frame_file(self, media_id: str, frame_idx: int) -> Path:
+        return self.frames / media_id / f"{frame_idx}.jpg"
+
+    def media_file(self, relative_path: str) -> Path:
+        """A media path as stored in the media table, back to a file on disk."""
+        return self.workspace / relative_path
 
     def create(self) -> None:
         for folder in (self.runs, self.tmp):
