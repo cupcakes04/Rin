@@ -1,0 +1,13 @@
+# FiftyOne's own environment (D-16): the viewer, where a person looks at frames and draws boxes.
+# Kept out of the core environment: FiftyOne brings a database server and many packages.
+# Created on the first `viewer.show` call, or by hand: uv sync --project src/rin/viewer
+[project]
+name = "rin-viewer"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fiftyone>=1.22,<2",      # in-app box drawing is open source from 1.13
+]
+
+[tool.uv]
+package = false

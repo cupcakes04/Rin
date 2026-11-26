@@ -4,8 +4,8 @@
     m = Master("workspace/store")
 """
 
-from rin import core, curate
+from rin import core, curate, human, viewer
 from rin.master import Master
 from rin.run import Run
 
-__all__ = ["Master", "Run", "core", "curate"]
+__all__ = ["Master", "Run", "core", "curate", "human", "viewer"]

@@ -27,7 +27,7 @@ flowchart LR
 
 **D-15 · The toolkit is a Python library first.** Master and Servants are driven from notebooks and a small command line. No HTTP API or web app of our own until a concrete need forces one: the viewer can't do something review needs, or another machine or program must call Rin.
 
-**D-16 · FiftyOne serves as a disposable viewer.** It reads a throwaway export (one script) and is never the data model.
+**D-16 · FiftyOne serves as a disposable viewer, and is where a person draws boxes.** It reads a throwaway export (`viewer.show`) and is never the data model; what a person draws there comes back as a run (`human.annotate`). No `sam3.click` for now: clicks serve fine-grained instances and masks, and Rin labels boxes (the user, 2026-11-26).
 
 **D-17 · Holy grail setup:**
 - class "person" first;
@@ -83,11 +83,9 @@ flowchart LR
 
 ## Proposed
 
-None right now.
+**D-33 · The checked test labels are one `human.annotate` run, started from SAM3's boxes.** The viewer copies SAM3's boxes above a gate (0.5 from the pilot) into the field the person edits, and shows its 0.3–0.5 boxes as a read-only hint layer. The person deletes wrong boxes, fixes loose ones, draws missing ones, and tags each frame `done`. `human.annotate` files the result as a run (`who` = the person, the SAM3 run among its `inputs`). **A frame is complete when it is in that run's frame set.** No accept/reject judgments for the test set; the `judgments` table and `m.dataset`'s judgment rules wait until a step needs to judge a run without replacing it. *Why:* it answers the open question below with one run that holds the checked truth, instead of assembling it from SAM3's run, judgments and added-box runs; the pilot shows correcting SAM3 at 0.5 means deleting about 1 box in 7 and adding about 1 person in 15 ([m3_pilot](../research/m3_pilot/README.md)). *Cost:* each checked box no longer points at the SAM3 box it came from (recoverable by overlap); D-27's judgment path and the `judgments` table go unused for now.
 
 ## Open
 
-**Where a person's clicks and drawn boxes are collected** ([usage B3](usage.md#b3--a-person-checks-it)). The agent's recommendation: in FiftyOne, which draws and edits 2D boxes in the open-source app since 1.13 ([docs](https://docs.voxel51.com/user_guide/annotation.html)). FiftyOne stays a disposable copy (D-16): a script reads the drawn boxes back into a `human.annotate` run. No `sam3.click` until drawing boxes proves too slow (D-27's middle step, skipped for now). Becomes Proposed once FiftyOne's drawing is checked on this machine in M3 step 3.
-
-**Which judgment makes a fixed frame count as complete** ([data_model judgments](data_model.md#judgments-a-persons-or-a-rules-verdict), [usage B3–B4](usage.md#b3--a-person-checks-it)). A frame *accept* points at one `run_id`, but once a person has added missed people, the frame's full labels span several runs: SAM3's, `sam3.click`'s and `human.annotate`'s. Accepting it against `test_labels` alone would claim SAM3's run was complete when it wasn't. The agent brings one recommendation at the start of M3, with the question above: the test set (usage B4) can't be frozen without it.
-- **The clicked points, lower priority:** they are what a `sam3.click` box was made from, so keeping them in that run's record costs almost nothing. Later they could serve as human-feedback data (the user's thought, for an RLHF-style loop). Not a goal now.
+**Which judgment makes a fixed frame count as complete** ([data_model judgments](data_model.md#judgments-a-persons-or-a-rules-verdict), [usage B3–B4](usage.md#b3--a-person-checks-it)). The agent's recommendation: D-33 above.
+- **Lower priority, the user's thought:** a person's corrections of a model's boxes could later serve as human-feedback data (an RLHF-style loop). Under D-33 both runs are kept, SAM3's and the corrected one, so the pairs can be rebuilt by overlap. Not a goal now.

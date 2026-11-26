@@ -26,6 +26,8 @@ result = module.verb(m, inputs, **that_step's_own_arguments)
 | `curate.keep(m, scores, where=...)` | The frames whose stored scores pass an SQL condition, e.g. `"motion >= 0.002"`. Nothing is decoded; trying another threshold is another cheap run | `frame_sets` |
 | `dinov3.embed(m, frames, model=..., size=(896, 512), what=("cls",), batch_size=32)` | One DINOv3 vector per frame and kind (`cls`, `mean_patch`), computed by a GPU job in its own environment. `size` is (width, height), multiples of 16 | `embeddings` + `embeddings.npy` |
 | `sam3.concept(m, frames, prompts={"person": "person"}, checkpoint=..., score_floor=0.1, masks=True, images_per_session=8)` | Every instance of each class on each frame, from a text prompt (one per class), by a GPU job in SAM3's environment. Boxes in [0, 1], masks as COCO RLE counts at the media's full size. Records the checkpoint's SHA-256 and `sam3_engine`'s commit | `instances` |
+| `viewer.show(m, frames, name=..., labels=[...], draw=None, classes=("person",), replace=False)` | Builds a throwaway FiftyOne dataset (D-16) from a frame set, in `rank` order: each label run's boxes as a read-only field, and, with `draw`, an empty field to draw boxes into. Open it with `uv run --project src/rin/viewer fiftyone app launch <name>`. Writes no run | |
+| `human.annotate(m, frames, view=..., field=..., who=..., done_tag="done")` | Files the frames of a viewer dataset tagged `done` (every object on them has a box) with the boxes drawn on them; boxes on untagged frames are refused, and a box dragged past the image edge is clipped to it. No score; the person in `who` | `frame_sets` (the finished frames), `instances` |
 | `curate.center(m, emb)` | A new embedding run: each vector minus its camera's mean vector (same kind), so the shared background drops out. Refuses a camera with a single frame (its centred vector would be zero) | `embeddings` + `embeddings.npy` |
 | `curate.random(m, frames, n=..., seed=...)` | `n` frames drawn at random, `rank` = draw order (the first k are a random k). Same seed, same frames in any store with the same files | `frame_sets` |
 | `curate.union(m, [frame_set, ...])` | Every frame of the given frame sets, once, unranked | `frame_sets` |
@@ -42,7 +44,7 @@ emb    = dinov3.embed(m, kept, model="facebook/dinov3-vitl16-pretrain-lvd1689m")
 cands  = curate.dedupe(m, kept, emb, cosine_max=0.99)
 ```
 
-Imports: `from rin import Master, core, curate` and `from rin.servants import dinov3, sam3`.
+Imports: `from rin import Master, core, curate, human, viewer` and `from rin.servants import dinov3, sam3`.
 
 ## Rules worth knowing
 
@@ -95,6 +97,10 @@ flowchart TB
       FC["frame_cache.py<br/>frames → JPEGs, shared"]
       LAU["launch.py<br/>start a job in its env, shared"]
     end
+    subgraph people["rin.viewer · rin.human: a person's eyes and hands"]
+      VW["viewer/__init__.py · caller<br/>viewer/job.py · FiftyOne (own env)"]
+      HU["human/annotate.py<br/>drawn boxes → run"]
+    end
     subgraph handles["handles"]
       MAS["master.py · Master<br/>the store: sql(), run(), runs()"]
       RUN["run.py · Run<br/>what every step returns"]
@@ -114,6 +120,8 @@ flowchart TB
     SAM --> TIM & WRI & MAS
     CUR --> REA & WRI & MAS
     DIN --> FC & LAU & WRI & MAS
+    VW --> FC & LAU & MAS
+    HU --> VW & WRI & MAS
     FC --> REA & MAS
     MAS --> VIE & LAY
     MAS --> RUN
@@ -128,6 +136,7 @@ flowchart TB
 | `rin.master`, `rin.run` | how to find and query runs | how any step works |
 | `rin.core`, `rin.curate` | its own step's logic | other steps, models |
 | `rin.servants.<model>` | one model: caller and job | other servants |
+| `rin.viewer`, `rin.human` | FiftyOne as a throwaway copy; turning what a person drew into a run | models |
 | `rin.servants.frame_cache`, `rin.servants.launch` | which frames are cached; how a job is started in its environment | any model's inputs or outputs |
 
 Tests: `uv run pytest` (CPU only: they generate their own tiny videos and fake the servants' jobs). A test checks that importing Rin loads no model framework.

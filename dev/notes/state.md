@@ -8,7 +8,7 @@
 
 ```mermaid
 flowchart LR
-    A["Direction<br/>✅ agreed"] --> D["M0 usage draft<br/>✅ agreed"] --> E["M1 core + ingest<br/>✅ closed"] --> F["M2 filters + embeddings<br/>✅ closed"] --> G["M3 teacher + checked test set<br/>▶ step 3: blind pilot"]
+    A["Direction<br/>✅ agreed"] --> D["M0 usage draft<br/>✅ agreed"] --> E["M1 core + ingest<br/>✅ closed"] --> F["M2 filters + embeddings<br/>✅ closed"] --> G["M3 teacher + checked test set<br/>▶ step 4: check 300 frames"]
     style G fill:#fde68a,color:#000
 ```
 
@@ -22,20 +22,16 @@ flowchart LR
 
 ## Next
 **M3 is running** ([milestones/M3.md](milestones/M3.md)).
-- **Steps 1 and 2:** done, and you checked them.
-- **Test set (D-32):** 300 frames from five days, labelled by SAM3 (`20261126-130121-sam3.concept-7efc`), from empty frames to 69 people ([research/m3_sam3_test_day](../research/m3_sam3_test_day/README.md)).
-- **Next, step 3, the blind pilot:**
-  1. Build a FiftyOne environment and an export script.
-  2. You draw every person on 20 test frames, with SAM3's boxes hidden.
-  3. Compare SAM3 with your boxes by box size.
+- **Steps 1 and 2:** done.
+- **Step 3, the blind pilot:** done ([research/m3_pilot](../research/m3_pilot/README.md)). 180 people on 18 frames, boxed in 22 minutes. SAM3 at score > 0.5 finds 93% of them, and 85% of its boxes are right.
+- **Next, step 4:** check all 300 test frames, starting from SAM3's boxes, as proposed in D-33.
 
 The first audit is triaged ([dev/audits/2026-11-26.md](../audits/2026-11-26.md#triage)); kept items wait for M4 and M5.
 
 ## Waiting on the user
-- **Go on step 3** as planned in M3.md, with FiftyOne for drawing boxes (the open question in [decisions.md](decisions.md#open)).
-- **Commit steps 1 and 2:**
-  - `src/`, `dev/tests/`, `docs/`, `dev/notes/`, `dev/research/`, `dev/audits/`, `dev/scripts/pull_meva.sh`;
-  - the `vendors/sam3_engine` pointer (now `bb14ef1`).
+- **D-33** ([decisions.md](decisions.md#proposed)): the checked test labels are one `human.annotate` run, started from SAM3's boxes above 0.5. A frame counts as complete when it is in that run. No judgments table for now.
+- **The wrong-box sheet** ([false_at_0.5.jpg](../research/m3_pilot/false_at_0.5.jpg)): which of the 30 are real people.
+- **Commit:** the viewer, `human`, the tests, `dev/scripts/fiftyone_mongod.sh`, `docs/`, the notes, `dev/research/m3_pilot/`.
 
 ## Vendor feature requests (to the user)
 None open.

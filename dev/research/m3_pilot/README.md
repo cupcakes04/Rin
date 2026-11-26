@@ -1,0 +1,55 @@
+# Blind pilot: how good is SAM3 against a person's own boxes?
+
+**Question.** On test frames boxed by a person who never saw SAM3's output, what share of people does SAM3 find, by size, and how many of its boxes are wrong? How long does a person take? The answer sets the labelling rule and the checking workflow for the 300 test frames (M3 step 4).
+
+**Setup** (M3 step 3, 2026-11-26). 20 random test frames (`20261126-132616-curate.random-1ec0`, all five days of D-32), shown in FiftyOne without SAM3's boxes. The user boxed every person and tagged 18 frames finished; 2 crowded frames were skipped and are not counted. Filed as `20261126-151047-human.annotate-3bd2`: 180 boxes, 4 of them clipped where the drag ran past the image edge. SAM3: `20261126-130121-sam3.concept-7efc` on the same frames. A SAM3 box matches a person's box if their overlap (IoU) is at least the threshold; highest score first, each person matched once. IoU 0.3 is the main table because crowd boxes were drawn loosely (the user: "the count is accurate, the boxes not exactly").
+
+**Time.** 22 minutes for the 18 frames, mostly on the crowded ones: about 7 s per box.
+
+## Results
+
+Every person the user drew is at least 32 px tall (median 97 px): none in the < 32 px band.
+
+**Matched at IoU ≥ 0.3:**
+
+| SAM3 score gate | recall 32–64 px | recall > 64 px | recall, all 180 | precision | SAM3 boxes | wrong boxes |
+|---|---|---|---|---|---|---|
+| > 0.1 | 0.94 (16/17) | 1.00 (163/163) | 0.99 (179) | 0.26 | 681 | 502 |
+| > 0.3 | 0.88 (15/17) | 0.98 (159/163) | 0.97 (174) | 0.72 | 241 | 67 |
+| > 0.5 | 0.82 (14/17) | 0.94 (154/163) | 0.93 (168) | 0.85 | 198 | 30 |
+
+**Matched at IoU ≥ 0.5** (stricter; partly the looseness of hand boxes): at > 0.5, recall 0.87 (157/180), precision 0.79.
+
+**Per frame** (people boxed by the user; SAM3 boxes above 0.3 and 0.5; misses and wrong boxes at > 0.5, IoU 0.3):
+
+| day | camera | frame | user | SAM3 > 0.3 | SAM3 > 0.5 | missed | wrong |
+|---|---|---|---|---|---|---|---|
+| 03-12 | G330 | 7995 | 61 | 77 | 61 | 6 | 6 |
+| 03-09 | G330 | 1800 | 28 | 37 | 32 | 2 | 6 |
+| 03-11 | G330 | 1440 | 26 | 33 | 27 | 1 | 2 |
+| 03-12 | G299 | 2700 | 23 | 29 | 25 | 1 | 3 |
+| 03-09 | G330 | 4560 | 10 | 10 | 10 | 0 | 0 |
+| 03-12 | G330 | 8040 | 9 | 11 | 10 | 0 | 1 |
+| 03-12 | G299 | 4635 | 6 | 13 | 8 | 2 | 4 |
+| 03-11 | G299 | 570 | 6 | 8 | 6 | 0 | 0 |
+| 03-12 | G330 | 3045 | 5 | 5 | 5 | 0 | 0 |
+| 03-15 | G330 | 6690 | 2 | 3 | 3 | 0 | 1 |
+| 03-13 | G330 | 5715 | 1 | 6 | 4 | 0 | 3 |
+| 03-13, 03-15 | | 4 frames | 1 each | | | 0 | 0 |
+| 03-13, 03-09 | | 3 frames | 0 | 0 | 0 | 0 | 0 |
+| 03-13 | G330 | 1680 | 0 | 5 | 4 | 0 | 4 |
+
+**The 12 people SAM3 missed above 0.5:** 11 of them have a SAM3 box between 0.1 and 0.5. Mostly people half hidden in the crowd or behind others; two are heads in a dense crowd.
+
+![missed](missed_at_0.5.jpg)
+
+**The 30 SAM3 boxes above 0.5 with no person's box:** about a third objects (bags and coats on the bleachers, a chair with a jacket, a dark shape on the floor), a third second boxes on people already matched (a group, a part, a person behind another), and a third look like people: either missed by the user or matched loosely. The user judges this sheet.
+
+![wrong](false_at_0.5.jpg)
+
+## Verdict
+
+- **SAM3 is a good starting point at a 0.5 gate:** 93% of people found, 85% of its boxes right. Checking means deleting about 1 box in 7 and adding about 1 person in 15, not drawing from scratch.
+- **The misses are recoverable:** 11 of 12 are SAM3 boxes scored 0.1–0.5. Showing those as a second, optional layer lets the person accept them instead of drawing (D-27's cheapest fix).
+- **Tiny people did not show up here:** nobody under 32 px was boxed on these 18 frames, so no ignore rule is needed for them yet. The 2 skipped crowded frames are where it could matter; step 4 checks every frame anyway.
+- **Time:** 7 s per box from scratch. Correcting SAM3's boxes should cost a fraction of that; step 4 measures it.

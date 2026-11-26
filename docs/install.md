@@ -1,6 +1,6 @@
 # Installing Rin
 
-Rin runs on Linux (developed on WSL2 with one 16 GB GPU). This page sets up the **core environment** (the store, ingest, sampling, curation) and, in sections 6 and 7, the DINOv3 and SAM3 environments. Each model gets its own separate environment, added to this page when its servant is built.
+Rin runs on Linux (developed on WSL2 with one 16 GB GPU). This page sets up the **core environment** (the store, ingest, sampling, curation) and, in sections 6 to 8, the DINOv3 and SAM3 environments and the viewer (FiftyOne). Each model gets its own separate environment, added to this page when its servant is built.
 
 ## What you need first
 
@@ -91,3 +91,15 @@ uv sync --locked --project src/rin/servants/sam3
 Check: `src/rin/servants/sam3/.venv/bin/python -c "import torch, sam3_engine; print(torch.cuda.is_available())"` prints `True`.
 
 The checkpoint is not downloaded by Rin: put `sam3.pt` from [facebook/sam3](https://huggingface.co/facebook/sam3) (gated: accept the licence first) in `workspace/checkpoints/sam3/`, and pass its path to `concept`.
+
+## 8. The viewer environment (FiftyOne)
+
+`viewer.show` and `human.annotate` run FiftyOne in a separate environment, defined in `src/rin/viewer/pyproject.toml`. FiftyOne keeps its datasets in MongoDB, and on Ubuntu 26.04 its `fiftyone-db` package installs without MongoDB's `mongod`. One script creates the environment and adds `mongod` (MongoDB's official Ubuntu 24.04 build, checked against its published SHA-256; no sudo):
+
+```bash
+bash dev/scripts/fiftyone_mongod.sh
+```
+
+Check: the script's last line is `db version v8.0.17`. If it says a library is missing, install that library with `apt` and run the script again. If FiftyOne later says ``Could not find `mongod` ``, run the script again: a fresh `uv sync` that reinstalls `fiftyone-db` removes the binary.
+
+Look and draw in the browser: `uv run --project src/rin/viewer fiftyone app launch <name>`, then open `http://localhost:5151`.
