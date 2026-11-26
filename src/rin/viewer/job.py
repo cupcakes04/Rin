@@ -4,7 +4,8 @@
 
 spec["command"] is one of:
 - "load": build a throwaway FiftyOne dataset `name` from frames (cached JPEGs), each frame's
-  boxes from runs as read-only fields, and an empty field a person draws boxes into.
+  boxes from runs as read-only fields, and a field a person draws into (empty, or holding a
+  run's boxes to start from).
 - "dump": write the boxes drawn in `field` of dataset `name`, and each frame's tags, to `out`.
 
 The App itself is started by hand while the person draws:
@@ -35,10 +36,14 @@ def load(spec: dict) -> None:
             sample[field] = fo.Detections(detections=[
                 fo.Detection(label=b["class"], bounding_box=b["xywh"], confidence=b["score"]) for b in boxes
             ])
-        if spec["draw_field"]:
-            sample[spec["draw_field"]] = fo.Detections(detections=[])
+        if spec["draw_field"]:  # what the person edits: empty, or a run's boxes to start from
+            sample[spec["draw_field"]] = fo.Detections(detections=[
+                fo.Detection(label=b["class"], bounding_box=b["xywh"]) for b in frame["start"]
+            ])
         samples.append(sample)
     dataset.add_samples(samples)
+    dataset.info = spec["info"]  # what it was built from, read back by "dump" for provenance
+    dataset.save()
 
     if spec["draw_field"]:
         field = spec["draw_field"]
@@ -65,7 +70,7 @@ def dump(spec: dict) -> None:
             "media_id": sample["rin_media_id"], "frame_idx": sample["rin_frame_idx"], "tags": list(sample.tags),
             "boxes": [{"class": d.label, "xywh": list(d.bounding_box)} for d in drawn],
         })
-    Path(spec["out"]).write_text(json.dumps({"frames": frames, "fiftyone": fo.__version__}))
+    Path(spec["out"]).write_text(json.dumps({"frames": frames, "info": dataset.info, "fiftyone": fo.__version__}))
     print(f"{sum(len(f['boxes']) for f in frames)} boxes on {len(frames)} frames read from {spec['name']!r}.{field}")
 
 

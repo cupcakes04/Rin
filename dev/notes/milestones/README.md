@@ -9,13 +9,13 @@
 ```mermaid
 flowchart LR
     M3["M3<br/>teacher + checked test set"] --> M4["M4<br/>selection + student"] --> M5["M5<br/>the proof"] --> M6["M6<br/>the loop"]
-    style M3 fill:#fde68a,color:#000
+    style M4 fill:#fde68a,color:#000
 ```
 
 | ID | Milestone | Done when | Status |
 |---|---|---|---|
-| M3 | Teacher + checked test set | The store is safe for human work; SAM3 labels the test day; the user checks them (D-16) and the judgments are stored; SAM3's cost and misses are measured ([M3.md](M3.md)) | running |
-| M4 | Selection + student | Three selection methods; YOLO export; one student per budget | — |
+| M3 | Teacher + checked test set | The store is safe for human work; SAM3 labels the test footage; the user checks every frame and the result is stored; SAM3's cost and misses are measured | closed 2026-11-26: checked test set `20261126-164727-human.annotate-71ed` ([research](../../research/m3_checked_test_set/README.md)) |
+| M4 | Selection + student | Three selection methods; YOLO export; one student per budget | next: plan it |
 | M5 | The proof | mAP against label budget per method, 3 seeds; an honest verdict (D-17) | — |
 | M6 | The loop | Uncertainty mining for round 2 | — |
 
@@ -37,3 +37,4 @@ Shortcuts that are fine to leave until their trigger happens. Each milestone sta
 | `probe` sorts every video's timestamps (needed for MEVA's AVI with B-frames), which could hide a timestamp reset in an MP4 | MP4 or MKV footage arrives | Sort only AVI, or refuse jumps larger than a B-frame reorder |
 | The frame reader decodes from the start of the file, no seeking | Hour-long recordings arrive | Seek to the nearest keyframe before the first wanted frame |
 | FiftyOne's `mongod` is copied into `src/rin/viewer/.venv` by `dev/scripts/fiftyone_mongod.sh` (MongoDB 8.0.17, Ubuntu 24.04 build): `fiftyone-db` 1.4.1 knows no Ubuntu past 24.x and installs without it | `fiftyone-db` ships a Linux wheel or knows Ubuntu 26.04; or the binary stops starting after a system upgrade | Drop the script; `uv sync` alone sets up the viewer |
+| The test set scores every person, even in ambiguous crowds where two careful passes disagree on about a fifth of the people ([m3_checked_test_set](../../research/m3_checked_test_set/README.md)) | Right before M5's first evaluation (D-34) | One `crowd` box per ambiguous cluster on the 85 frames with more than 20 people, filed as a new checked run; M5 scores with COCO's evaluation |

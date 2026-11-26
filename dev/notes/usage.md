@@ -31,7 +31,7 @@ Every step has the same shape (D-22):
 result = module.verb(m, inputs, **that_step's_own_arguments)   # -> a Run
 ```
 
-- `m` is the **Master**: the store on disk. It ingests media, records judgments and answers queries. It does no model work.
+- `m` is the **Master**: the store on disk. It finds runs and answers queries. It does no model work.
 - `inputs` are earlier runs (a frame set, an embedding run, a labels run).
 - The arguments belong to that step alone. `sam3.concept` has `prompts`; `yolo.train` has `epochs`. No shared request type (D-01).
 - The result is a **Run**: a small handle (`run.id`, `run.config`, `run.instances()`, …). The data stays on disk.
@@ -66,8 +66,8 @@ The caller has the real signature (so your editor autocompletes it and a typo fa
 ```python
 from datetime import datetime
 from rin import Master
-from rin import core, curate, export
-from rin.servants import dinov3, sam3, yolo, human
+from rin import core, curate, export, human, viewer
+from rin.servants import dinov3, sam3, yolo
 
 m = Master("workspace/store")        # creates the folder if new; never deletes anything
 ```
@@ -188,38 +188,27 @@ test_labels.instances().head()
 ### B3 · A person checks it
 
 ```python
-view = m.view(test_labels)                   # throwaway FiftyOne dataset (D-16); opens the app
-# In FiftyOne: tag each frame "complete" or "incomplete", tag wrong boxes "wrong".
-m.judge_from(view, who="nic")                 # tags -> judgments; FiftyOne is then deleted
-
-# The same thing by hand, to show what a judgment is:
-m.judge(target="frame",    run=test_labels, media_id=mid, frame_idx=812, verdict="reject", reason="missed 2 far people", who="nic")
-m.judge(target="instance", run=test_labels, instance_idx=40,             verdict="reject", reason="a statue",            who="nic")
-
-# Missed people, cheapest fix first:
-# 1. SAM3 already found them, below the gate: accept that stored box (D-26 kept it for this).
-m.judge(target="instance", run=test_labels, instance_idx=57, verdict="accept", reason="score 0.22, real person", who="nic")
-# 2. SAM3 never found them: click on the person, SAM3 draws box and mask (sam3_engine ImageSession.segment_object).
-fixes = sam3.click(m, "workspace/annotations/test_clicks.json", on=test_labels, who="nic")
-# 3. SAM3 can't segment them either (tiny, half hidden): draw the box by hand.
-drawn = human.annotate(m, "workspace/annotations/test_boxes.json", on=test_labels, who="nic")
+viewer.show(m, test_frames, name="test-check", draw="checked",
+            start_from=test_labels, start_above=0.5,             # SAM3's boxes above 0.5, to edit (D-33)
+            labels=[test_labels], label_scores=(0.3, 0.5))       # its 0.3-0.5 boxes, as read-only hints
+# In FiftyOne (uv run --project src/rin/viewer fiftyone app launch test-check):
+# delete wrong boxes, fix loose ones, draw missing people, tag each finished frame "done".
+checked = human.annotate(m, test_frames, view="test-check", field="checked", who="nic")
 ```
 
-- **What:** judgments go in their own table; SAM3's run is never edited (D-02). A frame accepted as "complete" means *every* person on it has a correct box (D-27). An *accept* on a single box overrides the score gate. A box added by a click or by hand is a run of its own, with the person in `who`, so it has provenance like any model output.
-- **Why:** a test set labelled by SAM3 alone measures agreement with SAM3, not accuracy (D-13). The order keeps the person's work to pointing and clicking; drawing is the last resort.
+- **What:** the checked labels are one run of their own, with the person in `who` and SAM3's run among its `inputs`; SAM3's run is never edited (D-02). A frame is complete when it is in `checked`'s frame set: every person on it has a box, and an empty finished frame means nobody is there (D-27, D-33). The gate and hint band come from the blind pilot ([m3_pilot](../research/m3_pilot/README.md)): at 0.5 SAM3 found 93% of the people and 90–95% of its boxes were right; most of its misses are boxes scored 0.3–0.5.
+- **The labelling rule** (from the pilot): box every person you can see, around the visible part; when unsure, box it if more likely yes; delete group boxes and box the people under them. No ignore regions.
+- **Why:** a test set labelled by SAM3 alone measures agreement with SAM3, not accuracy (D-13); a person boxing blind missed about a tenth of the people. Starting from SAM3 and correcting catches both, and turns the person's work into deleting and adding, not drawing everything.
 - **Without it:** a missed person counts as background, so a student that finds that person is marked wrong.
-- **Open for M3:** where the clicks happen. FiftyOne can tag frames and boxes; whether it can collect clicks or drawn boxes needs checking, and otherwise M3 picks a tool. Clicks collected into a file run through SAM3 as an ordinary batch job (D-07); seeing each mask appear live while clicking would need a long-lived SAM3 process, which waits until that need is real.
 
 ### B4 · Freeze the test set
 
 ```python
-test_ds  = m.dataset(labels=[test_labels, fixes, drawn], frames=test_frames,
-                     gate="score >= 0.4", frames_judged="accepted")       # placeholder gate: M3
-test_exp = export.yolo(m, test_ds, classes=["person"])
+test_exp = export.yolo(m, checked, classes=["person"])    # frames: checked's frame set; boxes: its instances
 ```
 
-- **What:** `m.dataset` is a query: frames a person accepted; boxes above the gate or accepted one by one; minus rejected boxes; plus the clicked and drawn boxes. `export.yolo` writes it in YOLO's own layout (D-12) as a run, which freezes exactly which frames and boxes it held.
-- **Why:** judgments keep changing; the export is the fixed thing every experiment is scored on.
+- **What:** `export.yolo` writes the checked run in YOLO's own layout (D-12) as a run of its own, which freezes exactly which frames and boxes the test set holds.
+- **Why:** one fixed thing every experiment is scored on.
 - **Without it:** students trained on Monday and Friday could be scored on different test sets without anyone noticing.
 
 ---

@@ -43,13 +43,14 @@ Every person the user drew is at least 32 px tall (median 97 px): none in the < 
 
 ![missed](missed_at_0.5.jpg)
 
-**The 30 SAM3 boxes above 0.5 with no person's box:** about a third objects (bags and coats on the bleachers, a chair with a jacket, a dark shape on the floor), a third second boxes on people already matched (a group, a part, a person behind another), and a third look like people: either missed by the user or matched loosely. The user judges this sheet.
+**The 30 SAM3 boxes above 0.5 with no person's box.** The user's judgement: only 10 are not people (bags and coats on the bleachers, a chair with a jacket, one camera artifact); the other 20 are people, mostly seated, which the user could tell only from the chair ("otherwise just a blob"), and SAM3 found them where the user didn't. By overlap, about 11 of those 20 lie apart from every user box (people the user missed) and about 9 lie mostly inside one (73–100%): some of these are a second box on an already-boxed person, still an error at checking time. So SAM3's precision at > 0.5 is **0.90–0.95**, not 0.85, and the person's blind boxes missed roughly a tenth of the people.
 
 ![wrong](false_at_0.5.jpg)
 
 ## Verdict
 
-- **SAM3 is a good starting point at a 0.5 gate:** 93% of people found, 85% of its boxes right. Checking means deleting about 1 box in 7 and adding about 1 person in 15, not drawing from scratch.
+- **SAM3 is a good starting point at a 0.5 gate:** 93% of the people the user boxed, 90–95% of its boxes right, and people the user missed. Checking means deleting about 1 box in 10–20 and adding about 1 person in 15, not drawing from scratch.
+- **Neither alone is the truth:** the blind person missed about a tenth of the people; SAM3 missed 7%. SAM3 first and a person correcting catches both (D-33). Automation bias still matters (a person may trust a wrong box), which is why the hint layer and the `done` tag ask for a look at every frame.
 - **The misses are recoverable:** 11 of 12 are SAM3 boxes scored 0.1–0.5. Showing those as a second, optional layer lets the person accept them instead of drawing (D-27's cheapest fix).
 - **Tiny people did not show up here:** nobody under 32 px was boxed on these 18 frames, so no ignore rule is needed for them yet. The 2 skipped crowded frames are where it could matter; step 4 checks every frame anyway.
 - **Time:** 7 s per box from scratch. Correcting SAM3's boxes should cost a fraction of that; step 4 measures it.

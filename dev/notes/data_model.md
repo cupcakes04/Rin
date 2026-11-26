@@ -135,6 +135,8 @@ Long format (one row per score), so a new score needs no new column.
 
 ### judgments: a person's or a rule's verdict
 
+**Not built.** The holy grail's test set doesn't need it: the checked labels are one `human.annotate` run, started from SAM3's boxes, and a frame is complete when it is in that run's frame set (D-33). This table is the design for when a step must judge a run *without replacing it* (e.g. accepting or rejecting a teacher's boxes on training frames); it is built then, not before.
+
 | Column | Type | Meaning |
 |---|---|---|
 | `judgment_id` | str | |
@@ -152,7 +154,7 @@ What the verdicts mean (D-27):
 - **frame, reject**: don't use this run's labels on this frame.
 - **instance, reject**: drop this one box.
 - **instance, accept**: keep this box even if its score is below the gate. This is the first fix for a missed person: SAM3 often found them, with a low score, and D-26 kept the box.
-- **A person SAM3 never found** comes in as a new run: `sam3.click` (the person clicks, SAM3 draws box and mask) or, last resort, `human.annotate` (drawn by hand). Both carry the person in `who`.
+- **A person the model never found** comes in as a new run, `human.annotate` (drawn by hand in the viewer, D-16), with the person in `who`.
 - **Latest wins**: when one target has several judgments, the one with the latest `judged_at` counts. Nothing is deleted.
 
 ## 3. Who writes what, who reads what
@@ -166,8 +168,8 @@ Every table is written by at least one cell of [usage.md](usage.md) and read by 
 | frame_sets | A2 sample, A3 keep, A5 dedupe, B1 test sample, C1 select, C2 union, D minus, D mine | every step that takes frames |
 | frame_scores | A3 score | A3 keep |
 | embeddings | A4 embed | A5 dedupe, C1 select |
-| instances | B2 & C2 `sam3.concept`, B3 `sam3.click` and `human.annotate`, D `yolo.predict` | B3 review, C3 dataset, D mine |
-| judgments | B3 review | B4 & C3 dataset |
+| instances | B2 & C2 `sam3.concept`, B3 `human.annotate`, D `yolo.predict` | B3 check, B4 export, C3 dataset, D mine |
+| judgments | not built (D-33) | |
 | artifacts | B4 & C3 export, C3 train | C3 train, C3 evaluate, D predict |
 | metrics | C3 evaluate | C4 results |
 

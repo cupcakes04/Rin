@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import tempfile
+from pathlib import Path
+
 import pyarrow as pa
 
 from rin import viewer
@@ -20,6 +23,8 @@ def annotate(m: Master, frames: Run, *, view: str, field: str, who: str, done_ta
     Boxes on frames not tagged finished are refused too: tag the frame, or delete the boxes.
     A box drawn past the image edge is clipped to it (the count is printed).
     who:    the person who drew them (D-27).
+    The run's inputs are the frame set plus every run the view showed or started from, and its
+    config says which (D-33: the checked labels started from SAM3's boxes above a gate).
     The view is a copy: once its frames are filed, it can be deleted.
     """
     if not isinstance(who, str) or not who.strip():
@@ -27,9 +32,23 @@ def annotate(m: Master, frames: Run, *, view: str, field: str, who: str, done_ta
     if "frame_sets" not in frames.tables:
         raise TypeError(f"annotate needs the frame set the boxes were drawn on; {frames.id} wrote {frames.tables}")
 
-    config = {"view": view, "field": field, "done_tag": done_tag}
-    with m.writer(step="human.annotate", config=config, inputs=[frames.id], who=who) as w:
-        drawn = viewer.drawn_boxes(view, field, w.tmp_dir)
+    # The view says what it was built from; read it before the run opens, so the run's inputs
+    # name every run the person saw or started from (D-33).
+    with tempfile.TemporaryDirectory() as tmp:
+        drawn = viewer.drawn_boxes(view, field, Path(tmp))
+    info = drawn["info"] or {}
+    if info.get("frames", frames.id) != frames.id:
+        raise ValueError(f"View {view!r} was built from frame set {info['frames']}, not {frames.id}")
+    seen = [*info.get("labels", []), *([info["start_from"]] if info.get("start_from") else [])]
+    for run_id in seen:
+        m.run(run_id)  # raises if the view names a run this store doesn't have
+    inputs = list(dict.fromkeys([frames.id, *seen]))
+    config = {
+        "view": view, "field": field, "done_tag": done_tag,
+        "start_from": info.get("start_from"), "start_above": info.get("start_above"),
+        "label_scores": info.get("label_scores"),
+    }
+    with m.writer(step="human.annotate", config=config, inputs=inputs, who=who) as w:
         allowed = set(map(tuple, m.sql(
             "SELECT media_id, frame_idx FROM frame_sets WHERE run_id = ?", [frames.id]
         ).fetchall()))

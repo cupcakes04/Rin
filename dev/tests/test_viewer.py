@@ -62,7 +62,7 @@ def test_show_refuses_bad_arguments(m: Master, frames: Run, kwargs: dict, error:
         viewer.show(m, frames, **args)
 
 
-def _fake_dump(frames: Run, boxes_per_frame: list, *, done: object = "all", extra_frame: bool = False):
+def _fake_dump(frames: Run, boxes_per_frame: list, *, done: object = "all", extra_frame: bool = False, info: dict | None = None):
     """Stands in for the viewer job's dump: the frames of `frames` in rank order, cycling through
     `boxes_per_frame`; `done` = "all" or the ranks tagged done."""
     rows = frames.frame_set().df().sort_values("rank")[["media_id", "frame_idx"]].values.tolist()
@@ -73,7 +73,7 @@ def _fake_dump(frames: Run, boxes_per_frame: list, *, done: object = "all", extr
         spec = json.loads(spec_file.read_text())
         assert spec["command"] == "dump"
         Path(spec["out"]).write_text(json.dumps({
-            "fiftyone": "fake",
+            "fiftyone": "fake", "info": info if info is not None else {"frames": frames.id},
             "frames": [
                 {"media_id": mid, "frame_idx": int(idx),
                  "tags": ["done"] if done == "all" or k in done else [],
@@ -101,7 +101,8 @@ def test_annotate_files_finished_frames_and_their_boxes(m: Master, frames: Run, 
     assert first[["x0", "y0"]].tolist() == pytest.approx([0.1, 0.2]) and first[["x1", "y1"]].tolist() == pytest.approx([0.4, 0.6])
     assert df["x1"].max() == 1.0  # 0.5 + 0.5 lands exactly on the edge
     assert run.info["who"] == "nic" and run.info["code"]["fiftyone"] == "fake" and run.inputs == [frames.id]
-    assert run.config == {"view": "pilot", "field": "drawn", "done_tag": "done"}
+    assert run.config == {"view": "pilot", "field": "drawn", "done_tag": "done",
+                          "start_from": None, "start_above": None, "label_scores": None}
 
 
 def test_annotate_files_only_the_frames_tagged_done(m: Master, frames: Run, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -146,3 +147,62 @@ def test_annotate_clips_a_box_drawn_past_the_edge_but_refuses_one_outside(
 def test_annotate_needs_a_person(m: Master, frames: Run) -> None:
     with pytest.raises(ValueError, match="who"):
         human.annotate(m, frames, view="pilot", field="drawn", who=" ")
+
+
+def _scored_run(m: Master, frames: Run, scores: list[float]) -> Run:
+    """A stand-in for SAM3 with one box per score on every frame."""
+    import pyarrow as pa
+
+    rows = frames.frame_set().df()
+    keys = [(r.media_id, int(r.frame_idx), s) for r in rows.itertuples() for s in scores]
+    n = len(keys)
+    with m.writer(step="sam3.concept", config={}, inputs=[frames.id]) as w:
+        w.write("instances", pa.table({
+            "instance_idx": list(range(n)), "media_id": [k[0] for k in keys], "frame_idx": [k[1] for k in keys],
+            "class": ["person"] * n, "score": [k[2] for k in keys],
+            "x0": [0.1] * n, "y0": [0.1] * n, "x1": [0.2 + k[2] / 2 for k in keys], "y1": [0.9] * n,
+            "mask_rle": pa.nulls(n, pa.string()), "keypoints": pa.nulls(n), "track_id": pa.nulls(n, pa.int64()),
+        }))
+    return m.run(w.run_id)
+
+
+def test_show_starts_from_a_runs_boxes_above_the_gate_and_shows_a_band_as_hints(
+    m: Master, frames: Run, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sent: dict = {}
+    monkeypatch.setattr(VIEWER_MODULE, "run_job", lambda _d, spec: sent.update(json.loads(spec.read_text())))
+    sam = _scored_run(m, frames, [0.2, 0.4, 0.8])
+    viewer.show(m, frames, name="check", draw="checked", start_from=sam, start_above=0.5,
+                labels=[sam], label_scores=(0.3, 0.5))
+    frame = sent["frames"][0]
+    assert [b["score"] for b in frame["start"]] == [0.8]
+    assert [b["score"] for b in frame["labels"]["hints_sam3_0_3_to_0_5"]] == [0.4]
+    assert sent["info"] == {"frames": frames.id, "labels": [sam.id], "label_scores": [0.3, 0.5],
+                            "start_from": sam.id, "start_above": 0.5}
+
+
+def test_show_refuses_start_from_without_a_draw_field(m: Master, frames: Run) -> None:
+    sam = _scored_run(m, frames, [0.8])
+    with pytest.raises(ValueError, match="draw field"):
+        viewer.show(m, frames, name="check", start_from=sam)
+
+
+def test_annotate_records_the_runs_the_view_showed_and_started_from(
+    m: Master, frames: Run, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sam = _scored_run(m, frames, [0.8])
+    info = {"frames": frames.id, "labels": [sam.id], "label_scores": [0.3, 0.5], "start_from": sam.id, "start_above": 0.5}
+    monkeypatch.setattr(VIEWER_MODULE, "run_job", _fake_dump(frames, [[BOX]], info=info))
+    run = human.annotate(m, frames, view="check", field="checked", who="nic")
+    assert run.inputs == [frames.id, sam.id]
+    assert run.config["start_from"] == sam.id and run.config["start_above"] == 0.5
+
+
+def test_annotate_refuses_a_view_built_from_another_frame_set(
+    m: Master, frames: Run, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    other = curate.random(m, frames, n=3, seed=1)
+    monkeypatch.setattr(VIEWER_MODULE, "run_job", _fake_dump(frames, [[]], info={"frames": other.id}))
+    with pytest.raises(ValueError, match="was built from"):
+        human.annotate(m, frames, view="check", field="checked", who="nic")
+

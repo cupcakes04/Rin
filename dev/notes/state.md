@@ -8,30 +8,38 @@
 
 ```mermaid
 flowchart LR
-    A["Direction<br/>✅ agreed"] --> D["M0 usage draft<br/>✅ agreed"] --> E["M1 core + ingest<br/>✅ closed"] --> F["M2 filters + embeddings<br/>✅ closed"] --> G["M3 teacher + checked test set<br/>▶ step 4: check 300 frames"]
-    style G fill:#fde68a,color:#000
+    A["Direction<br/>✅ agreed"] --> D["M0 usage draft<br/>✅ agreed"] --> E["M1 core + ingest<br/>✅ closed"] --> F["M2 filters + embeddings<br/>✅ closed"] --> G["M3 teacher + checked test set<br/>✅ closed"] --> H["M4 selection + student<br/>⏭ next: plan it"]
+    style H fill:#fde68a,color:#000
 ```
 
 ## Done
-- **Direction and decisions:** D-01 … D-31 agreed ([decisions.md](decisions.md)). Design target: [usage.md](usage.md) on [data_model.md](data_model.md).
-- **Data:** MEVA slice, sample media and v1 checkpoints in `workspace/` ([heavy_data.md](heavy_data.md)); Sapiens2 1B and DINOv3 ViT-L/16, ViT-H+/16 in the HF cache ([models/](models/README.md)).
-- **M1 and M2 closed** (2026-11-25, user checked). What exists and its rules: [docs/core.md](../../docs/core.md); setup: [docs/install.md](../../docs/install.md). Store, ingest, sampling, the frame reader, `curate.score_frames` / `keep` / `center` / `dedupe`, the frame cache, and the first servant, `dinov3.embed`. 60 CPU tests.
-- **M2's result** ([research/m2_filters_dedupe](../research/m2_filters_dedupe/README.md)): on the 2 fps pool, `motion >= 0.002` keeps 98%; `dedupe` at 0.99 leaves 4,453 candidates. Whole-frame vectors are dominated by the fixed background; centring by camera spreads them, and is for M4's selection.
-- **Working rules** ([CLAUDE.md](../../CLAUDE.md)): the agent may run GPU work; debt is "to fix" (milestone file) or "parked" (with a trigger, [milestones/](milestones/README.md#parked-debt)); a running milestone is one file, `milestones/M<n>.md`; after a milestone the user may give [dev/audit.md](../audit.md) to an outside agent (another model); its report goes to `dev/audits/` and the agent triages it (process redesigned 2026-11-26 after the first audit).
-- The inbox [brainstorms/brainstorm.md](brainstorms/brainstorm.md) is empty.
+- **Direction and decisions:** D-01 … D-34 agreed ([decisions.md](decisions.md)); nothing Proposed or Open. Design target: [usage.md](usage.md) on [data_model.md](data_model.md).
+- **M1, M2, M3 closed.** What exists and its rules: [docs/core.md](../../docs/core.md); setup, including the SAM3 and FiftyOne environments: [docs/install.md](../../docs/install.md). 119 CPU tests.
+- **M3 (2026-11-26):**
+  - **The store is safe for a person's work:** `media_id` comes from file content, writes are forced to disk, and uncommitted code is kept with each run as `src.diff`.
+  - **Labelling:** `sam3.concept` labels frames; FiftyOne is the viewer, where a person also draws (`viewer.show`, `human.annotate`).
+  - **The test set:** 300 frames from five days (D-32), checked by the user starting from SAM3's boxes above 0.5 (D-33). It is run **`20261126-164727-human.annotate-71ed`**: 4,884 people, 55 empty frames. Frame set `20261126-130121-curate.random-0187`, SAM3 run `20261126-130121-sam3.concept-7efc`.
+  - **Findings** ([m3_sam3_test_day](../research/m3_sam3_test_day/README.md), [m3_pilot](../research/m3_pilot/README.md), [m3_checked_test_set](../research/m3_checked_test_set/README.md)):
+    - SAM3 costs 0.78 s per frame and 6.8 GiB.
+    - Checking from SAM3 took about 5 s per frame; 272 of 300 frames needed no edit.
+    - SAM3's one systematic error is a box around a group of people.
+    - Crowds are noisy: two passes by the same person disagree on about a fifth of the people (parked debt for M5).
+  - **A new idea, raw, with a first measurement:** [review by exception](ideas/review_by_exception.md).
+- The first audit is triaged ([dev/audits/2026-11-26.md](../audits/2026-11-26.md#triage)): items kept for M4 and M5 are listed in its triage.
 
 ## Next
-**M3 is running** ([milestones/M3.md](milestones/M3.md)).
-- **Steps 1 and 2:** done.
-- **Step 3, the blind pilot:** done ([research/m3_pilot](../research/m3_pilot/README.md)). 180 people on 18 frames, boxed in 22 minutes. SAM3 at score > 0.5 finds 93% of them, and 85% of its boxes are right.
-- **Next, step 4:** check all 300 test frames, starting from SAM3's boxes, as proposed in D-33.
-
-The first audit is triaged ([dev/audits/2026-11-26.md](../audits/2026-11-26.md#triage)); kept items wait for M4 and M5.
+1. **Plan M4** (selection + student) in a fresh session, one file `milestones/M4.md`, split into steps. Start from:
+   - the audit findings kept for M4 (§1.2, §1.9, §3.1, §3.8, §3.9, §5.3);
+   - the parked-debt triggers ([milestones/](milestones/README.md#parked-debt)). `store_m2` retires when M4 re-runs the pool chain (sample, score, embed, dedupe) in the new store, and M2's research note then points at the new run ids;
+   - D-31: val is whole recordings from another hour of the pool day (03-07 has hours 09, 11 and 17 on the bucket, [heavy_data.md](heavy_data.md));
+   - the M4 rows of [lessons/rin_v1.md](lessons/rin_v1.md) (YOLO export, RLE to polygon).
+2. Optional, the user's call: an outside audit of M3 ([dev/audit.md](../audit.md)).
 
 ## Waiting on the user
-- **D-33** ([decisions.md](decisions.md#proposed)): the checked test labels are one `human.annotate` run, started from SAM3's boxes above 0.5. A frame counts as complete when it is in that run. No judgments table for now.
-- **The wrong-box sheet** ([false_at_0.5.jpg](../research/m3_pilot/false_at_0.5.jpg)): which of the 30 are real people.
-- **Commit:** the viewer, `human`, the tests, `dev/scripts/fiftyone_mongod.sh`, `docs/`, the notes, `dev/research/m3_pilot/`.
+- **Commit:** M3's last work:
+  - code and tests: `src/rin/viewer/`, `src/rin/human/`, `dev/tests/`;
+  - `dev/scripts/fiftyone_mongod.sh`, `docs/`, `dev/notes/` (with `milestones/M3.md` deleted), `dev/research/m3_*`.
+- **Optional:** delete the FiftyOne datasets `pilot` and `test-check`. Both are filed as runs, so the copies aren't needed: `uv run --project src/rin/viewer fiftyone datasets delete pilot` (and the same for `test-check`).
 
 ## Vendor feature requests (to the user)
 None open.
@@ -40,4 +48,4 @@ None open.
 - Gitignored: `dev/rin_v1/`, `workspace/`, `.venv/`.
 - To re-download MEVA: `bash dev/scripts/pull_meva.sh` (skips files already on disk).
 - Core environment: `uv sync`; tests: `uv run pytest`. DINOv3 job environment: `uv sync --locked --project src/rin/servants/dinov3`.
-- `workspace/store` holds a person's work from M3 on: never delete it to start over. Only its frame cache, `store/frames/`, is safe to delete. `workspace/store_m2/` is the M2 store, kept for the runs M2's research cites (its `frames/` is 11 GB).
+- `workspace/store` holds a person's work (the checked test set): never delete it to start over; back it up. Only its frame cache, `store/frames/`, is safe to delete. `workspace/store_m2/` is the M2 store, kept for the runs M2's research cites (its `frames/` is 11 GB).

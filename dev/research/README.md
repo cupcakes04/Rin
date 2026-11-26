@@ -15,4 +15,6 @@ Raw runs, weights and frame caches stay in `workspace/` (heavy, gitignored). Onl
 | Write-up | Question |
 |---|---|
 | [m2_filters_dedupe](m2_filters_dedupe/README.md) | What do cheap filters and DINOv3 de-duplication leave of the pool? |
-| [m3_sam3_test_day](m3_sam3_test_day/README.md) | What does SAM3 find on the test day, and what does it cost? |
+| [m3_sam3_test_day](m3_sam3_test_day/README.md) | What does SAM3 find on the test footage, and what does it cost? |
+| [m3_pilot](m3_pilot/README.md) | How good is SAM3 against a person's own blind boxes? |
+| [m3_checked_test_set](m3_checked_test_set/README.md) | How much did a person change to complete the test set, and where? |
