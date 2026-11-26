@@ -2,10 +2,11 @@
 
     uv run --project src/rin/servants/sam3 python job.py <spec.json>
 
-Reads spec.json (checkpoint, prompts, score_floor, masks, images_per_session, images) and
+Reads spec.json (checkpoint, prompts, score_floor, masks, box, images_per_session, images) and
 writes job.json next to it: every detection as {image, class, score, box, mask_rle}, plus
-library versions and the job's own cost. `box` is in pixels (x0, y0, x1, y1, pixel edges),
-tight around the mask; `mask_rle` is COCO counts, or null without masks.
+library versions and the job's own cost. `box` is in pixels (x0, y0, x1, y1, pixel edges):
+tight around the mask (spec box "mask") or SAM3's own detector box (spec box "detector");
+`mask_rle` is COCO counts, or null without masks.
 """
 
 from __future__ import annotations
@@ -45,12 +46,14 @@ def main(spec_file: Path) -> None:
                         # logs how many (4 of 34,000 on the test day, all scoring 0.5 or less).
                         for obj in session.detect(
                             image_idx=i, text=text, exemplar_boxes_xyxy_px=None,
-                            exemplar_labels=None, replace_existing_objects=False,
+                            exemplar_labels=None, replace_existing_objects=True,
                             keep_empty_mask_detections=False,
                         ):
+                            box = obj.mask_box_xyxy_px if spec["box"] == "mask" else obj.detector_box_xyxy_px
+                            if box is None:
+                                raise RuntimeError(f"SAM3 gave no {spec['box']} box for a detection on {chunk[i]['path']}")
                             found.append({
-                                "image": s + i, "class": cls, "score": obj.score,
-                                "box": list(obj.mask_box_xyxy_px),  # tight around the mask
+                                "image": s + i, "class": cls, "score": obj.score, "box": list(box),
                                 "mask_rle": _rle(obj.mask) if spec["masks"] else None,
                             })
             done = s + len(chunk)

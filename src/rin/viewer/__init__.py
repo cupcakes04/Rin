@@ -6,7 +6,7 @@ run: a view is a copy for looking, never data. What a person draws comes back in
 through `human.annotate`.
 
     viewer.show(m, frames, name="check", draw="checked", start_from=sam, start_above=0.5,
-                labels=[sam], label_scores=(0.3, 0.5))
+                labels=[sam], label_scores=(0.3, 0.5), tags={"flagged": human.suspects(m, frames, sam)})
     #   then, in a terminal:  uv run --project src/rin/viewer fiftyone app launch check
     #   draw, and tag each frame "done" once every object on it has a box
     human.annotate(m, frames, view="check", field="checked", who="nic")
@@ -40,6 +40,8 @@ def show(
     start_from: Run | None = None,
     start_above: float = 0.5,
     classes: list[str] | tuple[str, ...] = ("person",),
+    marks: dict[str, list[dict[str, Any]]] | None = None,
+    tags: dict[str, list[dict[str, Any]]] | None = None,
     replace: bool = False,
 ) -> None:
     """Build FiftyOne dataset `name` from a frame set, ordered by `rank` when it has one.
@@ -48,11 +50,17 @@ def show(
                   (named `run_<step>_<4 chars>`).
     label_scores: (low, high): of those, only boxes scoring above low and up to high, e.g.
                   (0.3, 0.5) for a hint layer of the boxes a gate leaves out, named
-                  `hints_<servant>_<low>_to_<high>`. Boxes without a score are always shown.
+                  `hints_<servant>_<4 chars>_<low>_to_<high>`. Boxes without a score are
+                  always shown.
     draw:         the name of a field to draw boxes into, with `classes` to pick from;
                   None to only look.
     start_from:   a run whose boxes scoring above `start_above` (and any without a score) are
                   copied into `draw` to start from (D-33): the person deletes, fixes, adds.
+    marks:        named read-only layers of boxes that aren't a run, e.g. {"suspects":
+                  human.suspects(...)}: each box {media_id, frame_idx, x0, y0, x1, y1, reason},
+                  shown in field `marks_<name>` with its reason as the label.
+    tags:         frame tags to filter on, e.g. {"flagged": human.suspects(...)}: each item
+                  names a frame (media_id, frame_idx); no layer is added.
     replace:      rebuild `name` if it exists. Refused by default: it may hold unsaved work.
 
     The dataset remembers the frame set and what it started from; `human.annotate` records them.
@@ -78,6 +86,18 @@ def show(
             raise TypeError(f"labels and start_from must be runs with boxes; {run.id} wrote {run.tables}")
     if "frame_sets" not in frames.tables:
         raise TypeError(f"show needs a frame set; {frames.id} wrote {frames.tables}")
+    marks = dict(marks or {})
+    for mark_name, boxes in marks.items():
+        if not isinstance(mark_name, str) or not NAME.match(mark_name):
+            raise ValueError(f"marks names must be letters, digits, '-' or '_', got {mark_name!r}")
+        if not all(isinstance(b, dict) and {"media_id", "frame_idx", "x0", "y0", "x1", "y1", "reason"} <= b.keys() for b in boxes):
+            raise ValueError(f"marks[{mark_name!r}] must be boxes with media_id, frame_idx, x0, y0, x1, y1, reason")
+    tags = dict(tags or {})
+    for tag, items in tags.items():
+        if not isinstance(tag, str) or not NAME.match(tag) or tag == "done":
+            raise ValueError(f"tags must be letters, digits, '-' or '_' and not 'done', got {tag!r}")
+        if not all(isinstance(i, dict) and {"media_id", "frame_idx"} <= i.keys() for i in items):
+            raise ValueError(f"tags[{tag!r}] must name frames by media_id and frame_idx")
 
     order = {
         (media_id, idx): k for k, (media_id, idx) in enumerate(m.sql(
@@ -90,7 +110,7 @@ def show(
         fields = {run.id: f"run_{run.step.replace('.', '_')}_{run.id[-4:]}" for run in labels}
     else:  # a hint layer says what it is: whose boxes, which scores
         band = "_to_".join(str(s).replace(".", "_") for s in label_scores)
-        fields = {run.id: f"hints_{run.step.split('.')[0]}_{band}" for run in labels}
+        fields = {run.id: f"hints_{run.step.split('.')[0]}_{run.id[-4:]}_{band}" for run in labels}
     if len(set(fields.values())) != len(fields):
         raise ValueError(f"Two label runs would share a field name: {fields}")
     low, high = label_scores if label_scores is not None else (None, None)
@@ -98,6 +118,23 @@ def show(
     for run in labels:
         for key, box in _boxes(m, run, frames, above=low, up_to=high):
             layers[key][fields[run.id]].append(box)
+    for mark_name, boxes in marks.items():
+        field = f"marks_{mark_name}"
+        for key in layers:
+            layers[key][field] = []
+        for b in boxes:
+            key = (b["media_id"], b["frame_idx"])
+            if key not in layers:
+                raise ValueError(f"marks[{mark_name!r}] has a box on {key}, which isn't in {frames.id}")
+            layers[key][field].append(
+                {"class": b["reason"], "score": None, "xywh": [b["x0"], b["y0"], b["x1"] - b["x0"], b["y1"] - b["y0"]]}
+            )
+    frame_tags: dict[tuple[str, int], list[str]] = {key: [] for key in order}
+    for tag, items in tags.items():
+        for key in sorted({(i["media_id"], i["frame_idx"]) for i in items}):
+            if key not in frame_tags:
+                raise ValueError(f"tags[{tag!r}] names {key}, which isn't in {frames.id}")
+            frame_tags[key].append(tag)
     start: dict[tuple[str, int], list[dict[str, Any]]] = {key: [] for key in order}
     if start_from is not None:
         for key, box in _boxes(m, start_from, frames, above=start_above, up_to=None):
@@ -106,7 +143,7 @@ def show(
     images = sorted(cached_frames(m, frames), key=lambda t: order[(t[0], t[1])])
     spec = {
         "command": "load", "name": name, "replace": replace, "draw_field": draw, "classes": classes,
-        "label_fields": sorted(fields.values()),
+        "label_fields": sorted([*fields.values(), *(f"marks_{n}" for n in marks)]),
         "info": {
             "frames": frames.id, "labels": [run.id for run in labels], "label_scores": label_scores,
             "start_from": start_from.id if start_from is not None else None,
@@ -115,7 +152,8 @@ def show(
         "frames": [
             {"path": str(path), "media_id": media_id, "frame_idx": idx,
              "width": sizes[media_id][0], "height": sizes[media_id][1],
-             "labels": layers[(media_id, idx)], "start": start[(media_id, idx)]}
+             "labels": layers[(media_id, idx)], "start": start[(media_id, idx)],
+             "tags": frame_tags[(media_id, idx)]}
             for media_id, idx, path in images
         ],
     }

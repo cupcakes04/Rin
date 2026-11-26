@@ -29,7 +29,11 @@ Between "trusted" and "a person checks" there may be a middle lane: a cheap visi
 
 ## First measurement (M3, 300 test frames)
 
-From SAM3 above 0.5 to the checked test set ([m3_checked_test_set](../../research/m3_checked_test_set/README.md)): 272 of 300 frames needed no edit. Frames with 20 people or fewer: 6 of 215 edited; more than 20: 22 of 85. SAM3's one systematic error is a box around a group; a box much wider than tall finds some of them (10 of 35 such boxes were groups). So the first candidate rule, "trust frames with 20 boxes or fewer", would have spared 215 frames, 6 of them (1 in 36) holding an error; whether adding "and no wide box" catches more of those errors is the next thing to measure. Crowds stay with a person, and even there two passes disagree on about a fifth of the people.
+From SAM3's detector boxes above 0.5 to the checked test set ([m3_checked_test_set](../../research/m3_checked_test_set/README.md)), with frames flagged by `human.suspects` (a box on the same spot on at least half of a camera's frames that day, or a near-duplicate):
+- **"Trust frames with 20 boxes or fewer"** would have spared 215 frames, 94 of them needing a change: sparse frames are where SAM3 boxes bags and coats.
+- **"Trust frames with 20 boxes or fewer and no flag"** would have spared 116 frames, 2 of them needing a change. 139 of the 152 flagged frames needed one.
+
+Optimistic: the flag thresholds were picked on these same frames. The next check of new footage tests the rule honestly. An earlier try on a check without flags counted only the errors the person noticed (audit [2026-11-26-m3](../../audits/2026-11-26-m3.md) §1.1): a rule learned from a person's edits is only as good as the check behind them.
 
 ## Where it may not apply
 

@@ -177,7 +177,7 @@ def test_dedupe_needs_a_vector_for_every_frame(m: Master, clips: Path, monkeypat
 def test_importing_rin_loads_no_model_framework() -> None:
     code = (
         "import sys, rin, rin.curate, rin.viewer, rin.human, rin.servants.frame_cache, rin.servants.dinov3, rin.servants.sam3\n"
-        "loaded = [m for m in ('torch', 'transformers', 'torchvision', 'sam3', 'sam3_engine', 'pycocotools', 'fiftyone')"
+        "loaded = [m for m in ('torch', 'transformers', 'torchvision', 'sam3', 'sam3_engine', 'fiftyone')"
         " if m in sys.modules]\n"
         "assert not loaded, loaded"
     )

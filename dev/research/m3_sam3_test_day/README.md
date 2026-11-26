@@ -9,7 +9,7 @@
 | ingest 03-09 / the other four days | `20261126-113320-core.ingest-91b1` / `20261126-125951-core.ingest-8353` |
 | sample 2 fps, union (18,030 frames) | `20261126-130121-curate.union-5a58` |
 | random 300, seed 0 (G299 139, G330 161) | `20261126-130121-curate.random-0187` |
-| sam3.concept | `20261126-130121-sam3.concept-7efc` |
+| sam3.concept | `20261126-130121-sam3.concept-7efc`, boxes around the mask (deleted 2026-11-26; `20261126-205940-sam3.concept-11ee` has the same detections, scores and masks, with SAM3's detector box (D-36)) |
 
 ## Results
 
@@ -46,7 +46,7 @@ Above 0.5, the median box is 79 px tall (5%: 34 px; 95%: 216 px).
 
 ## Why five days (D-32)
 
-The first run labelled 300 frames of 03-09 alone (`20261126-114845-sam3.concept-35e5`): a median of 42 people per frame, every frame the same event, nothing like the pool hour. A test set from one window measures that event. [12 of those frames](sheet_0309_only.jpg) and [the crowd at full resolution](far_side_0309_full_res.jpg), where the boxes still line up with the people.
+The first run labelled 300 frames of 03-09 alone (`20261126-114845-sam3.concept-35e5`, deleted 2026-11-26): a median of 42 people per frame, every frame the same event, nothing like the pool hour. A test set from one window measures that event. [12 of those frames](sheet_0309_only.jpg) and [the crowd at full resolution](far_side_0309_full_res.jpg), where the boxes still line up with the people.
 
 ## Verdict
 

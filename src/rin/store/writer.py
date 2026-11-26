@@ -31,8 +31,8 @@ def new_run_id(step: str, now: datetime) -> str:
 
 
 def code_version() -> tuple[dict[str, Any], str]:
-    """The Rin git commit the run was made with, and the uncommitted changes to src/ on top of
-    it, as a patch ("" when src/ is clean). The run keeps the patch, so a run made from
+    """The Rin git commit the run was made with, and the uncommitted changes to src/ and the core
+    environment (pyproject.toml, uv.lock) on top of it, as a patch ("" when they are clean). The run keeps the patch, so a run made from
     uncommitted code can still be traced to the code that made it."""
     here = Path(__file__).resolve().parent
 
@@ -44,7 +44,7 @@ def code_version() -> tuple[dict[str, Any], str]:
 
     top = Path(git("rev-parse", "--show-toplevel").strip())
     src = str(top / "src")
-    patch = git("diff", "--binary", "HEAD", "--", src)
+    patch = git("diff", "--binary", "HEAD", "--", src, str(top / "pyproject.toml"), str(top / "uv.lock"))
     # git diff leaves out files git doesn't track yet; diffing each against /dev/null adds them
     # (exit code 1 means "they differ", which is the point).
     for name in git("ls-files", "--others", "--exclude-standard", "--", src).splitlines():
@@ -83,9 +83,14 @@ def write_durably(target: Path, write: Callable[[Path], None]) -> None:
     """Write a file under a temporary name, push it to disk, then rename it into place: after a
     crash the file is either whole or absent, never empty or half-written."""
     partial = target.with_name(f"{target.name}.{os.getpid()}.partial")
-    write(partial)
-    _fsync(partial)
-    os.replace(partial, target)
+    try:
+        write(partial)
+        _fsync(partial)
+        os.replace(partial, target)
+    except BaseException:
+        partial.unlink(missing_ok=True)
+        raise
+    _fsync(target.parent)  # the rename itself reaches the disk
 
 
 class RunWriter:
@@ -185,8 +190,9 @@ class RunWriter:
         (self.tmp_dir / "run.json").write_text(json.dumps(self.info, indent=2))
         # Every file and the folder itself reach the disk before the rename makes the run
         # visible, and the rename reaches the disk before the step returns.
-        for file in self.tmp_dir.iterdir():
-            _fsync(file)
+        # Deepest first, so each folder is synced after what it holds (steps may write subfolders).
+        for path in sorted(self.tmp_dir.rglob("*"), key=lambda p: len(p.parts), reverse=True):
+            _fsync(path)
         _fsync(self.tmp_dir)
         os.rename(self.tmp_dir, self.layout.run_dir(self.run_id))
         _fsync(self.layout.runs)

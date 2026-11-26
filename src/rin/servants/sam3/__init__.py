@@ -33,6 +33,7 @@ def concept(
     checkpoint: str | Path,
     score_floor: float = 0.1,
     masks: bool = True,
+    box: str = "detector",
     images_per_session: int = 8,
 ) -> Run:
     """Detect every instance of each class on every frame of a frame set (GPU). Each frame is
@@ -44,6 +45,9 @@ def concept(
     score_floor:        detections scoring at or below it are not stored. Keep it low: the
                         real score gate is chosen later, without running SAM3 again (D-26).
     masks:              store each detection's mask as COCO RLE at the media's full size.
+    box:                "detector" (D-36): SAM3's own box, predicted separately from the mask.
+                        "mask": the tight box around the mask; when a mask has two pieces (a
+                        stray patch on another person) it spans both.
     images_per_session: images whose features sit on the GPU at once. 8 fits in 16 GB (v1).
     """
     if not isinstance(prompts, dict) or not prompts or not all(
@@ -57,12 +61,19 @@ def concept(
         raise ValueError(f"score_floor must be in [0, 1), got {score_floor!r}")
     if not isinstance(masks, bool):
         raise ValueError(f"masks must be True or False, got {masks!r}")
+    if box not in ("mask", "detector"):
+        raise ValueError(f"box must be 'mask' or 'detector', got {box!r}")
     if not isinstance(images_per_session, int) or isinstance(images_per_session, bool) or images_per_session < 1:
         raise ValueError(f"images_per_session must be a positive integer, got {images_per_session!r}")
     if "frame_sets" not in frames.tables:
         raise TypeError(f"sam3.concept needs a frame set; {frames.id} wrote {frames.tables}")
+    if not m.sql("SELECT 1 FROM frame_sets WHERE run_id = ? LIMIT 1", [frames.id]).fetchall():
+        raise ValueError(f"Frame set {frames.id} is empty")
 
-    config = {"prompts": prompts, "score_floor": score_floor, "masks": masks, "images_per_session": images_per_session}
+    config = {
+        "prompts": prompts, "score_floor": score_floor, "masks": masks, "box": box,
+        "images_per_session": images_per_session,
+    }
     with m.writer(
         step="sam3.concept", config=config, inputs=[frames.id],
         model="sam3", checkpoint=m.layout.relative_media_path(checkpoint),

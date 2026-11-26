@@ -80,8 +80,8 @@ This is the most likely place the idea fails at first, and the most interesting 
 |---|---|
 | Class | person |
 | Student | YOLO; one size fixed for the whole experiment (fallback RF-DETR) |
-| Pool | MEVA school site, cameras G299 and G330, 2018-03-07, one continuous hour ([../data.md](../heavy_data.md)) |
-| Test set | Same cameras, **another day** (2018-03-09). Its SAM3 labels are checked by a person before any experiment runs, and selection never touches it (D-13) |
+| Pool | MEVA school site, cameras G299 and G330, 2018-03-07, one continuous hour ([../heavy_data.md](../heavy_data.md)) |
+| Test set | Same cameras, **other days**: 300 random frames from five days (D-32), SAM3's labels checked by a person, crowds as ignore regions (D-34); run `20261126-231507-human.annotate-9c6c`. Selection never touches it (D-13) |
 | Val set | A few whole recordings held out from the pool day, SAM3 labels unchecked; only picks each student's checkpoint (D-31) |
 
 ## 6. Known risks

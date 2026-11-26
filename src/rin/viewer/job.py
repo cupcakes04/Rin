@@ -4,8 +4,8 @@
 
 spec["command"] is one of:
 - "load": build a throwaway FiftyOne dataset `name` from frames (cached JPEGs), each frame's
-  boxes from runs as read-only fields, and a field a person draws into (empty, or holding a
-  run's boxes to start from).
+  boxes from runs (and marks) as read-only fields, its tags, and a field a person draws into
+  (empty, or holding a run's boxes to start from).
 - "dump": write the boxes drawn in `field` of dataset `name`, and each frame's tags, to `out`.
 
 The App itself is started by hand while the person draws:
@@ -30,7 +30,9 @@ def load(spec: dict) -> None:
     dataset = fo.Dataset(name, persistent=True)  # persistent: survives restarting the App
     samples = []
     for frame in spec["frames"]:
-        sample = fo.Sample(filepath=frame["path"], rin_media_id=frame["media_id"], rin_frame_idx=frame["frame_idx"])
+        sample = fo.Sample(
+            filepath=frame["path"], rin_media_id=frame["media_id"], rin_frame_idx=frame["frame_idx"], tags=frame["tags"],
+        )
         sample.metadata = fo.ImageMetadata(width=frame["width"], height=frame["height"])
         for field, boxes in frame["labels"].items():
             sample[field] = fo.Detections(detections=[

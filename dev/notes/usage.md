@@ -188,26 +188,28 @@ test_labels.instances().head()
 ### B3 · A person checks it
 
 ```python
-viewer.show(m, test_frames, name="test-check", draw="checked",
+viewer.show(m, test_frames, name="check", draw="checked", classes=("person", "crowd"),
             start_from=test_labels, start_above=0.5,             # SAM3's boxes above 0.5, to edit (D-33)
-            labels=[test_labels], label_scores=(0.3, 0.5))       # its 0.3-0.5 boxes, as read-only hints
-# In FiftyOne (uv run --project src/rin/viewer fiftyone app launch test-check):
-# delete wrong boxes, fix loose ones, draw missing people, tag each finished frame "done".
-checked = human.annotate(m, test_frames, view="test-check", field="checked", who="nic")
+            labels=[test_labels], label_scores=(0.3, 0.5),       # its 0.3-0.5 boxes, as read-only hints
+            tags={"flagged": human.suspects(m, test_frames, test_labels, above=0.5)})
+# In FiftyOne (uv run --project src/rin/viewer fiftyone app launch check): flagged frames first;
+# delete wrong boxes, fix loose ones, draw missing people, a "crowd" box over people you can't
+# tell apart; tag each finished frame "done". Save as often as you like:
+checked = human.annotate(m, test_frames, view="check", field="checked", who="nic")
 ```
 
-- **What:** the checked labels are one run of their own, with the person in `who` and SAM3's run among its `inputs`; SAM3's run is never edited (D-02). A frame is complete when it is in `checked`'s frame set: every person on it has a box, and an empty finished frame means nobody is there (D-27, D-33). The gate and hint band come from the blind pilot ([m3_pilot](../research/m3_pilot/README.md)): at 0.5 SAM3 found 93% of the people and 90–95% of its boxes were right; most of its misses are boxes scored 0.3–0.5.
-- **The labelling rule** (from the pilot): box every person you can see, around the visible part; when unsure, box it if more likely yes; delete group boxes and box the people under them. No ignore regions.
+- **What:** the checked labels are one run of their own, with the person in `who` and SAM3's run among its `inputs`; SAM3's run is never edited (D-02). A frame is complete when it is in `checked`'s frame set: every person on it has a box, and an empty finished frame means nobody is there (D-27, D-33). The gate and hint band come from the blind pilot ([m3_pilot](../research/m3_pilot/README.md)): at 0.5 SAM3 found 94% of the people and 90–95% of its boxes were right; most of its misses are boxes scored 0.3–0.5. The flags point at SAM3's typical error, objects on the same spot of a fixed camera (bags, coats), which a quick check passes ([m3_checked_test_set](../research/m3_checked_test_set/README.md)).
+- **The labelling rule** (from the pilot): box every person you can see, around the visible part; when unsure, box it if more likely yes; delete group boxes and box the people under them. Where people can't be told apart, one `crowd` box over the cluster: the boxes inside it are dropped and scoring ignores the region (D-34).
 - **Why:** a test set labelled by SAM3 alone measures agreement with SAM3, not accuracy (D-13); a person boxing blind missed about a tenth of the people. Starting from SAM3 and correcting catches both, and turns the person's work into deleting and adding, not drawing everything.
 - **Without it:** a missed person counts as background, so a student that finds that person is marked wrong.
 
 ### B4 · Freeze the test set
 
 ```python
-test_exp = export.yolo(m, checked, classes=["person"])    # frames: checked's frame set; boxes: its instances
+test_exp = export.coco(m, checked, classes=["person"], crowd="crowd")   # crowd boxes -> iscrowd=1 (D-34)
 ```
 
-- **What:** `export.yolo` writes the checked run in YOLO's own layout (D-12) as a run of its own, which freezes exactly which frames and boxes the test set holds.
+- **What:** the export writes the checked run as COCO ground truth (D-12), as a run of its own, which freezes exactly which frames and boxes the test set holds. COCO, not YOLO, because scoring must ignore crowd regions and Ultralytics' validation can't (D-34; the details are parked debt for M5).
 - **Why:** one fixed thing every experiment is scored on.
 - **Without it:** students trained on Monday and Friday could be scored on different test sets without anyone noticing.
 
@@ -237,14 +239,14 @@ for meth in methods:
 
 ```python
 to_label    = curate.union(m, list(sel.values()))
-pool_labels = sam3.concept(m, to_label, prompts={"person": ["person"]},
+pool_labels = sam3.concept(m, to_label, prompts={"person": "person"},
                            checkpoint="workspace/checkpoints/sam3/sam3.pt", score_floor=0.1, masks=True)
 ```
 
 - **What:** one SAM3 job over every frame any selection picked.
 - **Why:** a frame picked by three methods is labelled once; each dataset later takes its own subset by query.
 - **Without it:** SAM3 time, the most expensive step, would be paid several times per frame.
-- **Not checked by a person:** training labels stay pseudo-labels; that is the point of a teacher. Spot checks are possible with the same `m.view`.
+- **Not checked by a person:** training labels stay pseudo-labels; that is the point of a teacher. Spot checks are possible with the same `viewer.show`.
 
 ### C3 · Train and evaluate every point on the curve
 
@@ -253,11 +255,10 @@ for (meth, s), picks in sel.items():
     for n in budgets:
         tags = {"method": meth, "seed": s, "n": n}
         ds   = m.dataset(labels=[pool_labels], frames=picks, top=n,
-                         gate="score >= 0.4 AND area BETWEEN 0.0001 AND 0.5",   # placeholders: M3
-                         frames_judged="not_rejected")
-        exp     = export.yolo(m, ds, classes=["person"], tags=tags)
+                         gate="score >= 0.4 AND area BETWEEN 0.0001 AND 0.5")   # placeholders: M4
+        exp     = export.yolo(m, ds, classes=["person"], val=val_labels, tags=tags)   # val: D-31, chosen in M4
         student = yolo.train(m, exp, model="yolo26s", epochs=100, imgsz=1280, seed=s, tags=tags)  # placeholders: M4
-        yolo.evaluate(m, student, test_exp, tags=tags)
+        coco.evaluate(m, student, test_exp, tags=tags)       # COCO scoring, crowd regions ignored (D-34)
 ```
 
 - **What:** 3 methods × 3 seeds × 4 budgets = 36 exports, trainings and evaluations, each a run with tags.
@@ -272,7 +273,7 @@ res = m.sql("""
     SELECT r.tags->>'method' AS method, (r.tags->>'n')::INT AS n,
            avg(x.value) AS map, stddev(x.value) AS spread
     FROM metrics x JOIN runs r USING (run_id)
-    WHERE r.step = 'yolo.evaluate' AND x.name = 'mAP50-95'
+    WHERE r.step = 'coco.evaluate' AND x.name = 'mAP50-95'
     GROUP BY method, n ORDER BY method, n
 """)
 res.plot_curve(x="n", y="map", group="method", band="spread")
@@ -291,7 +292,7 @@ best       = m.best_run(step="yolo.train", where="tags->>'method' = 'kcenter' AN
 unlabelled = curate.minus(m, cands, to_label)
 preds      = yolo.predict(m, best, unlabelled, conf_floor=0.05)
 hard       = curate.mine(m, preds, method="uncertain", band=(0.3, 0.6), n_max=250)        # placeholders: M6
-round2     = sam3.concept(m, hard, prompts={"person": ["person"]},
+round2     = sam3.concept(m, hard, prompts={"person": "person"},
                           checkpoint="workspace/checkpoints/sam3/sam3.pt", score_floor=0.1, masks=True)
 ds2        = m.dataset(labels=[pool_labels, round2], frames=curate.union(m, [sel[("kcenter", 0)], hard]), ...)
 ```
@@ -312,5 +313,5 @@ Actions, tracking and search aren't drafted (one milestone ahead, D-19). The dat
 |---|---|
 | A servant call blocks the notebook until the job ends (SAM3 on thousands of frames could take hours) | If jobs must queue or run overnight unattended, the caller needs a submit-and-wait mode; the job half doesn't change |
 | Frame images are cached as JPEG, a second lossy compression after H.264 | Every model sees the same pixels, so comparisons stay fair; a pixel-exact need would mean PNG (much larger) |
-| `m.dataset` arguments (`gate`, `frames_judged`, `top`) are a guess at what queries are common | Expect them to change in M3–M4; `m.sql` stays as the escape hatch |
+| `m.dataset` arguments (`gate`, `top`) are a guess at what queries are common | Expect them to change in M4; `m.sql` stays as the escape hatch |
 | Every frame set, even a union, is a run on disk | Many tiny folders over time; harmless at this scale |

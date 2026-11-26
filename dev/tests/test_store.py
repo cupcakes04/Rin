@@ -154,7 +154,7 @@ def test_a_durable_write_is_whole_or_absent(tmp_path: Path) -> None:
 
     with pytest.raises(OSError, match="disk gone"):
         write_durably(tmp_path / "b.txt", crash)
-    assert not (tmp_path / "b.txt").exists()
+    assert [p.name for p in tmp_path.iterdir()] == ["a.txt"]  # no b.txt, no .partial left behind
 
 
 def _instances(boxes: list[tuple[float, float, float, float]]) -> pa.Table:
@@ -196,3 +196,29 @@ def test_vendor_commit_is_the_checkout_head(tmp_path: Path) -> None:
     (tmp_path / "a.txt").write_text("2")
     assert vendor_commit(tmp_path) == head + "+dirty"
 
+
+
+def test_a_nan_score_is_refused(m: Master) -> None:
+    table = _instances([(0.1, 0.1, 0.2, 0.2)]).set_column(4, "score", pa.array([float("nan")]))
+    with pytest.raises(ValueError, match="NaN"):
+        with m.writer(step="test.step", config={}, inputs=[]) as w:
+            w.write("instances", table)
+
+
+def test_a_nan_frame_score_is_refused(m: Master) -> None:
+    table = pa.table({"media_id": ["m1"], "frame_idx": [0], "name": ["motion"], "value": [float("nan")]})
+    with pytest.raises(ValueError, match="NaN"):
+        with m.writer(step="test.step", config={}, inputs=[]) as w:
+            w.write("frame_scores", table)
+
+
+def test_files_in_a_runs_subfolders_are_synced(m: Master, monkeypatch: pytest.MonkeyPatch) -> None:
+    synced: list[Path] = []
+    real = WRITER_MODULE._fsync
+    monkeypatch.setattr(WRITER_MODULE, "_fsync", lambda path: (synced.append(path), real(path)))
+    with m.writer(step="test.step", config={}, inputs=[]) as w:
+        w.write("frame_sets", _frame_set())
+        (w.tmp_dir / "files" / "labels").mkdir(parents=True)
+        (w.tmp_dir / "files" / "labels" / "a.txt").write_text("0 0.5 0.5 0.1 0.1")
+    names = [p.name for p in synced]
+    assert names.index("a.txt") < names.index("labels") < names.index("files")

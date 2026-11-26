@@ -102,7 +102,8 @@ def test_annotate_files_finished_frames_and_their_boxes(m: Master, frames: Run, 
     assert df["x1"].max() == 1.0  # 0.5 + 0.5 lands exactly on the edge
     assert run.info["who"] == "nic" and run.info["code"]["fiftyone"] == "fake" and run.inputs == [frames.id]
     assert run.config == {"view": "pilot", "field": "drawn", "done_tag": "done",
-                          "start_from": None, "start_above": None, "label_scores": None}
+                          "start_from": None, "start_above": None, "label_scores": None,
+                          "crowd_class": "crowd", "inside_crowd": 0.5}
 
 
 def test_annotate_files_only_the_frames_tagged_done(m: Master, frames: Run, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -176,7 +177,7 @@ def test_show_starts_from_a_runs_boxes_above_the_gate_and_shows_a_band_as_hints(
                 labels=[sam], label_scores=(0.3, 0.5))
     frame = sent["frames"][0]
     assert [b["score"] for b in frame["start"]] == [0.8]
-    assert [b["score"] for b in frame["labels"]["hints_sam3_0_3_to_0_5"]] == [0.4]
+    assert [b["score"] for b in frame["labels"][f"hints_sam3_{sam.id[-4:]}_0_3_to_0_5"]] == [0.4]
     assert sent["info"] == {"frames": frames.id, "labels": [sam.id], "label_scores": [0.3, 0.5],
                             "start_from": sam.id, "start_above": 0.5}
 
@@ -206,3 +207,71 @@ def test_annotate_refuses_a_view_built_from_another_frame_set(
     with pytest.raises(ValueError, match="was built from"):
         human.annotate(m, frames, view="check", field="checked", who="nic")
 
+
+
+def test_show_can_compare_two_runs_of_one_servant_in_a_score_band(
+    m: Master, frames: Run, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sent: dict = {}
+    monkeypatch.setattr(VIEWER_MODULE, "run_job", lambda _d, spec: sent.update(json.loads(spec.read_text())))
+    a, b = _scored_run(m, frames, [0.4]), _scored_run(m, frames, [0.4])
+    viewer.show(m, frames, name="cmp", labels=[a, b], label_scores=(0.3, 0.5))
+    assert len(sent["label_fields"]) == 2
+
+
+def test_show_puts_marks_in_a_layer_and_tags_frames(
+    m: Master, frames: Run, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sent: dict = {}
+    monkeypatch.setattr(VIEWER_MODULE, "run_job", lambda _d, spec: sent.update(json.loads(spec.read_text())))
+    first = frames.frame_set().df().sort_values("rank").iloc[0]
+    mark = {"media_id": first.media_id, "frame_idx": int(first.frame_idx), "x0": 0.1, "y0": 0.2, "x1": 0.3, "y1": 0.6,
+            "reason": "same spot on 5 of 6 frames"}
+    viewer.show(m, frames, name="check", marks={"suspects": [mark]})
+    shown = sent["frames"][0]
+    assert all(f["tags"] == [] for f in sent["frames"])
+    assert shown["labels"]["marks_suspects"] == [
+        {"class": "same spot on 5 of 6 frames", "score": None, "xywh": pytest.approx([0.1, 0.2, 0.2, 0.4])}
+    ]
+    assert "marks_suspects" in sent["label_fields"]
+    with pytest.raises(ValueError, match="isn't in"):
+        viewer.show(m, frames, name="check", marks={"suspects": [mark | {"media_id": "m-elsewhere"}]})
+
+    viewer.show(m, frames, name="check", tags={"flagged": [mark, mark]})
+    assert sent["frames"][0]["tags"] == ["flagged"] and all(f["tags"] == [] for f in sent["frames"][1:])
+    assert sent["label_fields"] == []
+    with pytest.raises(ValueError, match="isn't in"):
+        viewer.show(m, frames, name="check", tags={"flagged": [mark | {"media_id": "m-elsewhere"}]})
+    with pytest.raises(ValueError, match="done"):
+        viewer.show(m, frames, name="check", tags={"done": [mark]})
+
+
+def test_annotate_from_a_run_files_the_done_frames_and_leaves_the_rest(
+    m: Master, frames: Run, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sam = _scored_run(m, frames, [0.8])
+    info = {"frames": frames.id, "labels": [], "label_scores": None, "start_from": sam.id, "start_above": 0.5}
+    monkeypatch.setattr(VIEWER_MODULE, "run_job", _fake_dump(frames, [[BOX]], done={0, 1}, info=info))
+    run = human.annotate(m, frames, view="check", field="checked", who="nic")
+    assert len(run) == 2 and len(run.instances().df()) == 2
+
+
+def test_annotate_refuses_a_view_that_doesnt_name_its_frame_set(
+    m: Master, frames: Run, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(VIEWER_MODULE, "run_job", _fake_dump(frames, [[]], info={}))
+    with pytest.raises(ValueError, match="frame set"):
+        human.annotate(m, frames, view="check", field="checked", who="nic")
+
+
+def test_a_crowd_box_removes_the_boxes_inside_it(m: Master, frames: Run, monkeypatch: pytest.MonkeyPatch) -> None:
+    crowd = {"class": "crowd", "xywh": [0.0, 0.0, 0.5, 0.5]}
+    inside = {"class": "person", "xywh": [0.1, 0.1, 0.1, 0.1]}
+    mostly_in = {"class": "person", "xywh": [0.35, 0.1, 0.2, 0.1]}  # three quarters inside: removed
+    mostly_out = {"class": "person", "xywh": [0.45, 0.1, 0.2, 0.1]}  # a quarter inside: kept
+    monkeypatch.setattr(VIEWER_MODULE, "run_job", _fake_dump(frames, [[crowd, inside, mostly_in, mostly_out]]))
+    run = human.annotate(m, frames, view="pilot", field="drawn", who="nic")
+    df = run.instances().df()
+    assert sorted(df["class"].unique()) == ["crowd", "person"]
+    assert len(df) == 12  # 6 frames: the crowd box and the box mostly outside it
+    assert df[df["class"] == "person"]["x0"].tolist() == pytest.approx([0.45] * 6)

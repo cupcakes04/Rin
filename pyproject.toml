@@ -11,6 +11,7 @@ dependencies = [
     "pandas>=2.2",     # .df() on query results, for notebooks
     "pillow>=11",      # writes the frame cache's JPEGs
     "pyarrow>=18",     # writes and checks Parquet tables
+    "pycocotools>=2.0.8",  # decodes COCO RLE masks (suspect flags); COCO scoring in M5 (D-34)
 ]
 
 [dependency-groups]

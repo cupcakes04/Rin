@@ -7,6 +7,7 @@ writes it.
 
 from __future__ import annotations
 
+import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 
@@ -112,9 +113,18 @@ def conform(name: str, table: pa.Table) -> pa.Table:
         bad = pc.invert(pc.is_in(table.column("kind"), pa.array(allowed)))
         if pc.any(bad).as_py():
             raise ValueError(f"Table {name!r}: kind must be one of {allowed}")
+    for column in FINITE.get(name, ()):
+        values = table.column(column).drop_null().to_numpy()
+        if not np.isfinite(values).all():
+            raise ValueError(f"Table {name!r}: column {column!r} has NaN or infinite values")
     if name == "instances":
         _check_boxes(table)
     return table
+
+
+# Float columns that must hold real numbers: NaN passes every < and > comparison, so range
+# checks alone let it through.
+FINITE = {"frames": ("pts",), "frame_scores": ("value",), "instances": ("score",)}
 
 
 def _check_boxes(table: pa.Table) -> None:
@@ -129,5 +139,5 @@ def _check_boxes(table: pa.Table) -> None:
             f"e.g. row {i}: ({x0[i]}, {y0[i]}, {x1[i]}, {y1[i]})"
         )
     scores = table.column("score").drop_null().to_numpy()
-    if ((scores < 0) | (scores > 1)).any():
+    if (~((scores >= 0) & (scores <= 1))).any():
         raise ValueError("Table 'instances': score outside [0, 1]")

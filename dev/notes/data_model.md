@@ -165,7 +165,7 @@ Every table is written by at least one cell of [usage.md](usage.md) and read by 
 |---|---|---|
 | runs | every cell | C4 results, everything (provenance) |
 | media, frames | A1 ingest | A2 sample, every servant (paths, sizes), export |
-| frame_sets | A2 sample, A3 keep, A5 dedupe, B1 test sample, C1 select, C2 union, D minus, D mine | every step that takes frames |
+| frame_sets | A2 sample, A3 keep, A5 dedupe, B1 test sample, B3 `human.annotate`, C1 select, C2 union, D minus, D mine | every step that takes frames |
 | frame_scores | A3 score | A3 keep |
 | embeddings | A4 embed | A5 dedupe, C1 select |
 | instances | B2 & C2 `sam3.concept`, B3 `human.annotate`, D `yolo.predict` | B3 check, B4 export, C3 dataset, D mine |

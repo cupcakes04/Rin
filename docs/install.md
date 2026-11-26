@@ -65,7 +65,7 @@ frames = core.sample(m, pool, fps=2)
 m.sql("SELECT camera, count(*) AS clips, sum(n_frames) AS frames FROM media GROUP BY camera").df()
 ```
 
-Ingesting the 24 pool clips decodes every frame once, which took about 100 s on this machine. Everything Rin writes goes to `workspace/store/`; deleting that folder starts over. What each call does, and the rules behind it: [core.md](core.md).
+Ingesting the 24 pool clips decodes every frame once, which took about 100 s on this machine. Everything Rin writes goes to `workspace/store/`. Once it holds a person's work (a `human.annotate` run), never delete it to start over: only its frame cache, `store/frames/`, is safe to delete. Back up the human runs after each labelling session: `bash dev/scripts/backup_human_runs.sh <folder>` (a folder on the Windows side, `/mnt/c/...`, survives a broken WSL disk). What each call does, and the rules behind it: [core.md](core.md).
 
 ## 6. The DINOv3 environment (GPU)
 

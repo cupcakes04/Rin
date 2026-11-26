@@ -76,7 +76,9 @@ def test_concept_files_the_jobs_boxes_in_unit_coordinates(
     assert info["model"] == "sam3" and info["checkpoint"] == "checkpoints/sam3.pt"
     assert info["checkpoint_sha256"] == hashlib.sha256(b"not really weights").hexdigest()
     assert info["code"]["sam3_engine"] == "engine123" and info["code"]["torch"] == "fake"
-    assert run.config == {"prompts": {"person": "person"}, "score_floor": 0.1, "masks": True, "images_per_session": 8}
+    assert run.config == {
+        "prompts": {"person": "person"}, "score_floor": 0.1, "masks": True, "box": "detector", "images_per_session": 8,
+    }
     assert sorted(p.name for p in m.layout.run_dir(run.id).iterdir() if p.name != "src.diff") == [
         "instances.parquet", "run.json"
     ]
@@ -127,6 +129,7 @@ def test_a_failed_job_leaves_no_run(m: Master, frames: Run, checkpoint: Path, mo
         ({"score_floor": True}, "score_floor"),
         ({"masks": 1}, "masks"),
         ({"images_per_session": 0}, "images_per_session"),
+        ({"box": "tight"}, "box"),
     ],
 )
 def test_bad_arguments_fail_before_any_work(
