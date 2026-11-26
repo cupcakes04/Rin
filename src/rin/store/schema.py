@@ -46,6 +46,23 @@ TABLES: dict[str, pa.Schema] = {
         pa.field("instance_idx", pa.int64()),                   # null: a whole-frame vector
         pa.field("kind", pa.string(), nullable=False),          # cls | mean_patch | box_pooled
     ]),
+    "instances": pa.schema([                                    # one thing found on one frame
+        pa.field("instance_idx", pa.int64(), nullable=False),   # counts within the run
+        pa.field("media_id", pa.string(), nullable=False),
+        pa.field("frame_idx", pa.int64(), nullable=False),
+        pa.field("class", pa.string(), nullable=False),         # plain text, e.g. person (D-25)
+        pa.field("score", pa.float64()),                        # null for a person's box
+        pa.field("x0", pa.float64(), nullable=False),           # box corners in [0, 1] (D-10)
+        pa.field("y0", pa.float64(), nullable=False),
+        pa.field("x1", pa.float64(), nullable=False),
+        pa.field("y1", pa.float64(), nullable=False),
+        pa.field("mask_rle", pa.string()),                      # COCO RLE counts, media's full size
+        pa.field("keypoints", pa.list_(pa.struct([              # matched by name (D-11)
+            pa.field("name", pa.string()), pa.field("x", pa.float64()),
+            pa.field("y", pa.float64()), pa.field("score", pa.float64()),
+        ]))),
+        pa.field("track_id", pa.int64()),                       # same object across frames
+    ]),
 }
 
 EMBEDDING_KINDS = ("cls", "mean_patch", "box_pooled")
@@ -95,4 +112,22 @@ def conform(name: str, table: pa.Table) -> pa.Table:
         bad = pc.invert(pc.is_in(table.column("kind"), pa.array(allowed)))
         if pc.any(bad).as_py():
             raise ValueError(f"Table {name!r}: kind must be one of {allowed}")
+    if name == "instances":
+        _check_boxes(table)
     return table
+
+
+def _check_boxes(table: pa.Table) -> None:
+    """Every box inside [0, 1] with positive width and height (D-10). Nothing is clamped here:
+    a step converting pixels must hand over valid boxes, so a geometry bug fails loudly."""
+    x0, y0, x1, y1 = (table.column(c).to_numpy() for c in ("x0", "y0", "x1", "y1"))
+    bad = ~((x0 >= 0) & (x0 < x1) & (x1 <= 1) & (y0 >= 0) & (y0 < y1) & (y1 <= 1))
+    if bad.any():
+        i = int(bad.argmax())
+        raise ValueError(
+            f"Table 'instances': {int(bad.sum())} boxes outside [0, 1] or with no area, "
+            f"e.g. row {i}: ({x0[i]}, {y0[i]}, {x1[i]}, {y1[i]})"
+        )
+    scores = table.column("score").drop_null().to_numpy()
+    if ((scores < 0) | (scores > 1)).any():
+        raise ValueError("Table 'instances': score outside [0, 1]")

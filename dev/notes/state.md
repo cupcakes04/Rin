@@ -8,7 +8,7 @@
 
 ```mermaid
 flowchart LR
-    A["Direction<br/>✅ agreed"] --> D["M0 usage draft<br/>✅ agreed"] --> E["M1 core + ingest<br/>✅ closed"] --> F["M2 filters + embeddings<br/>✅ closed"] --> G["M3 teacher + checked test set<br/>⏭ next: plan it"]
+    A["Direction<br/>✅ agreed"] --> D["M0 usage draft<br/>✅ agreed"] --> E["M1 core + ingest<br/>✅ closed"] --> F["M2 filters + embeddings<br/>✅ closed"] --> G["M3 teacher + checked test set<br/>▶ step 3: blind pilot"]
     style G fill:#fde68a,color:#000
 ```
 
@@ -21,16 +21,21 @@ flowchart LR
 - The inbox [brainstorms/brainstorm.md](brainstorms/brainstorm.md) is empty.
 
 ## Next
-1. **Plan M3** (teacher + checked test set), in a fresh session, one file `milestones/M3.md`. Start from:
-   - the two open questions in [decisions.md](decisions.md#open): where a person's clicks and drawn boxes are collected; which judgment makes a fixed frame complete;
-   - the parked-debt triggers: "a second servant is built" fires in M3 (move the job launch beside `frame_cache.py`);
-   - v1's SAM3 notes ([models/](models/README.md#v1-notes-worth-reading-before-writing-a-servant)) and the M3 rows of [lessons/rin_v1.md](lessons/rin_v1.md) (geometry check, RLE to polygon);
-   - `who` can already be passed to a run (`RunWriter(who=...)`);
-   - two points of the agent's own, checked in code on 2026-11-26: `curate.dedupe` silently drops the rest of a stream after a zero vector (NaN after normalising; `curate.center` makes exact zeros for a one-frame group), and from M3 the store holds a person's work while `media_id` is random and the docs call the store safe to delete.
-2. The first audit ([dev/audits/2026-11-26.md](../audits/2026-11-26.md)) is not triaged and not carried into the plan.
+**M3 is running** ([milestones/M3.md](milestones/M3.md)).
+- **Steps 1 and 2:** done, and you checked them.
+- **Test set (D-32):** 300 frames from five days, labelled by SAM3 (`20261126-130121-sam3.concept-7efc`), from empty frames to 69 people ([research/m3_sam3_test_day](../research/m3_sam3_test_day/README.md)).
+- **Next, step 3, the blind pilot:**
+  1. Build a FiftyOne environment and an export script.
+  2. You draw every person on 20 test frames, with SAM3's boxes hidden.
+  3. Compare SAM3 with your boxes by box size.
+
+The first audit is triaged ([dev/audits/2026-11-26.md](../audits/2026-11-26.md#triage)); kept items wait for M4 and M5.
 
 ## Waiting on the user
-- Commit: `CLAUDE.md`, `dev/audit.md`, `dev/audits/` (new; delete `2026-11-26.md` first if you'd rather not keep it), `dev/notes/brainstorms/README.md`, `dev/notes/state.md`.
+- **Go on step 3** as planned in M3.md, with FiftyOne for drawing boxes (the open question in [decisions.md](decisions.md#open)).
+- **Commit steps 1 and 2:**
+  - `src/`, `dev/tests/`, `docs/`, `dev/notes/`, `dev/research/`, `dev/audits/`, `dev/scripts/pull_meva.sh`;
+  - the `vendors/sam3_engine` pointer (now `bb14ef1`).
 
 ## Vendor feature requests (to the user)
 None open.
@@ -39,4 +44,4 @@ None open.
 - Gitignored: `dev/rin_v1/`, `workspace/`, `.venv/`.
 - To re-download MEVA: `bash dev/scripts/pull_meva.sh` (skips files already on disk).
 - Core environment: `uv sync`; tests: `uv run pytest`. DINOv3 job environment: `uv sync --locked --project src/rin/servants/dinov3`.
-- `workspace/store` is derived data: delete it and re-run (ingest about 130 s; scoring 100 s; caching 3 min; embedding 8 min). The frame cache, `workspace/store/frames/`, is 11 GB.
+- `workspace/store` holds a person's work from M3 on: never delete it to start over. Only its frame cache, `store/frames/`, is safe to delete. `workspace/store_m2/` is the M2 store, kept for the runs M2's research cites (its `frames/` is 11 GB).

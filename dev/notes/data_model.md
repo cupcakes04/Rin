@@ -56,7 +56,7 @@ erDiagram
 | `config` | JSON | Every argument the step ran with, including the ones left at their default, so nothing is hidden |
 | `inputs` | list[str] | The `run_id`s this run read |
 | `tags` | JSON | Free labels set by the caller, e.g. `{"method": "kcenter", "n": 250, "seed": 0}`. Used to group results (usage §C4) |
-| `code` | JSON | Git commit of Rin and of the vendor engine used |
+| `code` | JSON | Git commit of Rin (`rin`), whether `src/` had uncommitted changes (`src_dirty`; then the run folder keeps them as `src.diff`, hash in `src_diff_sha256`), library versions a job reports, and the vendor engine's commit (from the first vendor servant, M3) |
 | `who` | str | Who started it: the user, or the person who clicked or drew the boxes for `sam3.click` and `human.*` runs. Not `by`: that is a reserved word in SQL |
 | `started_at`, `finished_at` | timestamp | |
 
@@ -64,14 +64,14 @@ erDiagram
 
 | Column | Type | Meaning |
 |---|---|---|
-| `media_id` | str | Assigned at ingest. A path that is already ingested is refused, loudly |
+| `media_id` | str | `m` + the first 16 hex characters of the file's SHA-256: the same file always gets the same id, so a rebuilt store keeps a person's judgments attached. A path already ingested, or the same content under another path, is refused, loudly |
 | `path` | str | Relative to `workspace/` (the store's parent), e.g. `media/meva/pool/….avi`. Media outside the workspace is refused, so store and media move together |
 | `kind` | `video` or `image` | An image is a media with exactly one frame (D-24) |
 | `width`, `height` | int | Pixels. Needed to turn stored [0, 1] geometry back into pixels (D-10) |
 | `n_frames` | int | Counted by decoding, not estimated from duration × fps |
 | `site`, `camera` | str or null | From the optional `describe` function the user passes to ingest (for MEVA it reads the filename: `school`, `G299`); null without one |
 | `started_at` | timestamp or null | Wall-clock time of frame 0. Frame time = `started_at + pts`: what a later robotics or analysis project needs |
-| `split` | str | `pool`, `test`, `sample`. Set per file, so a recording can never be split by frame (D-13). Selection refuses `test` media |
+| `split` | str | `pool`, `val`, `test`, `sample`. Set per file, so a recording can never be split by frame (D-13). Selection only reads `pool` media; `val` picks a student's checkpoint (D-31) |
 
 ### frames: one row per frame in the file (written by `core.ingest`)
 
@@ -185,11 +185,12 @@ workspace/store/
   tmp/                      # runs being written; renamed into runs/ when complete
   judgments/
     20261124-160212-nic.parquet   # one file per judging session, never edited
-  frames/                   # cache of decoded frame images (D-29): safe to delete
+  frames/                   # cache of decoded frame images (D-29): the only part safe to delete
     <media_id>/<frame_idx>.jpg
 ```
 
-- **A run is visible only when it is complete.** A job writes into a temporary folder and renames it into `runs/` as its last act. A crashed job leaves no half-run behind (D-23).
+- **A run is visible only when it is complete.** A job writes into a temporary folder and renames it into `runs/` as its last act. A crashed job leaves no half-run behind (D-23). Files and folders are pushed to disk (`fsync`) before the rename, so a hard crash can't leave an empty `run.json`.
+- **The store is not derived data.** From M3 it holds a person's checks, clicks and drawn boxes, which nothing can rebuild. Back it up; never delete it to start over.
 - **Tables are DuckDB views** over `runs/*/<table>.parquet`. Adding a run adds files; no existing file is ever rewritten. This is why v1's 2.35 s rewrite of one big JSON catalog can't happen here.
 - **The frame cache** holds JPEGs of the frames a servant needs, written the first time they are needed. It is derived data: delete it and it rebuilds. JPEG re-compresses frames that H.264 already compressed; every model sees the same pixels, so the experiment stays fair, but it is a shortcut (debt in [usage.md §Debt](usage.md#debt-this-draft-takes-on)).
 

@@ -9,3 +9,10 @@ Each write-up holds:
 - **the verdict**, honest, including "it didn't work, and here is what we try next".
 
 Raw runs, weights and frame caches stay in `workspace/` (heavy, gitignored). Only the conclusions and the small files that support them live here, in git.
+
+## Write-ups
+
+| Write-up | Question |
+|---|---|
+| [m2_filters_dedupe](m2_filters_dedupe/README.md) | What do cheap filters and DINOv3 de-duplication leave of the pool? |
+| [m3_sam3_test_day](m3_sam3_test_day/README.md) | What does SAM3 find on the test day, and what does it cost? |

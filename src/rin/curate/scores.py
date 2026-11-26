@@ -52,38 +52,38 @@ def score_frames(m: Master, frames: Run, names: list[str]) -> Run:
     if "frame_sets" not in frames.tables:
         raise TypeError(f"score_frames needs a frame set; {frames.id} wrote {frames.tables}")
 
-    per_media = m.sql(
-        """SELECT d.media_id, d.path, d.width, d.height, list(s.frame_idx ORDER BY s.frame_idx)
-           FROM frame_sets s JOIN media d USING (media_id)
-           WHERE s.run_id = ? GROUP BY ALL ORDER BY d.path""",
-        [frames.id],
-    ).fetchall()
-
-    cols: dict[str, list] = {"media_id": [], "frame_idx": [], "name": [], "value": []}
-
-    def add(media_id: str, idx: list[int], name: str, values: list[float]) -> None:
-        cols["media_id"] += [media_id] * len(idx)
-        cols["frame_idx"] += idx
-        cols["name"] += [name] * len(idx)
-        cols["value"] += values
-
-    for n, (media_id, path, width, height, idx) in enumerate(per_media, start=1):
-        started = time.perf_counter()
-        size = (SCORE_WIDTH, max(2, round(SCORE_WIDTH * height / width / 2) * 2))
-        grays = [_gray(rgb) for _, rgb in read_frames(m.layout.media_file(path), idx, size=size)]
-        if "motion" in names and len(grays) > 1:
-            steps = [float(np.abs(b - a).mean()) for a, b in zip(grays, grays[1:], strict=False)]
-            add(media_id, idx, "motion", [steps[0], *steps])
-        if "blur" in names:
-            add(media_id, idx, "blur", [_blur(g) for g in grays])
-        if "dark" in names:
-            add(media_id, idx, "dark", [float((g < DARK_BELOW).mean()) for g in grays])
-        if "bright" in names:
-            add(media_id, idx, "bright", [float((g > BRIGHT_ABOVE).mean()) for g in grays])
-        print(f"[{n}/{len(per_media)}] {path}: {len(idx)} frames, {time.perf_counter() - started:.1f} s")
-
     config = {"names": names, "width": SCORE_WIDTH, "dark_below": DARK_BELOW, "bright_above": BRIGHT_ABOVE}
     with m.writer(step="curate.score_frames", config=config, inputs=[frames.id]) as w:
+        per_media = m.sql(
+            """SELECT d.media_id, d.path, d.width, d.height, list(s.frame_idx ORDER BY s.frame_idx)
+               FROM frame_sets s JOIN media d USING (media_id)
+               WHERE s.run_id = ? GROUP BY ALL ORDER BY d.path""",
+            [frames.id],
+        ).fetchall()
+
+        cols: dict[str, list] = {"media_id": [], "frame_idx": [], "name": [], "value": []}
+
+        def add(media_id: str, idx: list[int], name: str, values: list[float]) -> None:
+            cols["media_id"] += [media_id] * len(idx)
+            cols["frame_idx"] += idx
+            cols["name"] += [name] * len(idx)
+            cols["value"] += values
+
+        for n, (media_id, path, width, height, idx) in enumerate(per_media, start=1):
+            started = time.perf_counter()
+            size = (SCORE_WIDTH, max(2, round(SCORE_WIDTH * height / width / 2) * 2))
+            grays = [_gray(rgb) for _, rgb in read_frames(m.layout.media_file(path), idx, size=size)]
+            if "motion" in names and len(grays) > 1:
+                steps = [float(np.abs(b - a).mean()) for a, b in zip(grays, grays[1:], strict=False)]
+                add(media_id, idx, "motion", [steps[0], *steps])
+            if "blur" in names:
+                add(media_id, idx, "blur", [_blur(g) for g in grays])
+            if "dark" in names:
+                add(media_id, idx, "dark", [float((g < DARK_BELOW).mean()) for g in grays])
+            if "bright" in names:
+                add(media_id, idx, "bright", [float((g > BRIGHT_ABOVE).mean()) for g in grays])
+            print(f"[{n}/{len(per_media)}] {path}: {len(idx)} frames, {time.perf_counter() - started:.1f} s")
+
         w.write("frame_scores", pa.table(cols))
     return m.run(w.run_id)
 

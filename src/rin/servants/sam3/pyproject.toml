@@ -1,0 +1,28 @@
+# The SAM3 job's own environment (D-07): job.py runs here, the caller in the core env.
+# Created on the first `sam3.concept` call, or by hand: uv sync --project src/rin/servants/sam3
+# sam3_engine pins numpy<2, which the core (numpy>=2) can't share: one reason it has its own env.
+[project]
+name = "rin-sam3-job"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "sam3_engine",            # the user's engine, from vendors/ (editable: its code, not a copy)
+    "torch==2.14.1",          # the CUDA 13.0 build, from the index below (same as the DINOv3 job)
+    "torchvision==0.29.1",
+    "numpy>=1.26,<2",
+    "pillow>=11",
+    "pycocotools>=2.0.8",     # masks -> COCO RLE
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+sam3_engine = { path = "../../../../vendors/sam3_engine", editable = true }
+torch = { index = "pytorch-cu130" }
+torchvision = { index = "pytorch-cu130" }
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true

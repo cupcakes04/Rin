@@ -17,6 +17,10 @@ pull() { # s3_prefix dest_dir camera_regex max_files
 
 # Pool: school site, cameras G299 + G330, 2018-03-07 09:55-10:55 (24 clips of 5 min)
 pull drops-123-r13/2018-03-07/10/ "$D/pool" 'school\.G(299|330)\.' 100
-# Test: same cameras, a different day, 15 min each (6 clips)
-pull drops-123-r13/2018-03-09/10/ "$D/test" 'school\.G(299|330)\.' 6
+# Test (D-32): same cameras, five other days, 15 min per camera each (6 clips per window)
+pull drops-123-r13/2018-03-09/10/ "$D/test" 'school\.G(299|330)\.' 6   # 10:10-10:25
+pull drops-123-r13/2018-03-11/11/ "$D/test" 'school\.G(299|330)\.' 6   # 11:15-11:30
+pull drops-123-r13/2018-03-12/10/ "$D/test" 'school\.G(299|330)\.' 6   # 10:00-10:15
+pull drops-123-r13/2018-03-13/16/ "$D/test" 'school\.G(299|330)\.' 6   # 15:55-16:10
+pull drops-123-r13/2018-03-15/15/ "$D/test" 'school\.G(299|330)\.' 6   # 14:55-15:10
 echo DONE

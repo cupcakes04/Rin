@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -43,6 +44,28 @@ def test_ingesting_the_same_file_twice_is_refused(m: Master, clips: Path) -> Non
     core.ingest(m, clips, split="pool")
     with pytest.raises(ValueError, match="Already ingested"):
         core.ingest(m, clips / "cfr.mkv", split="test")
+
+
+def test_media_id_comes_from_the_file_so_a_fresh_store_gives_the_same_id(workspace: Path, clips: Path) -> None:
+    """Judgments point at media_id; rebuilding the store must not orphan them."""
+    first = core.ingest(Master(workspace / "store"), clips / "cfr.mkv", split="pool").media().df()
+    again = core.ingest(Master(workspace / "store_again"), clips / "cfr.mkv", split="pool").media().df()
+    assert first["media_id"].tolist() == again["media_id"].tolist()
+    assert first["media_id"][0].startswith("m") and len(first["media_id"][0]) == 17
+
+
+def test_the_same_content_under_another_path_is_refused(m: Master, clips: Path) -> None:
+    core.ingest(m, clips / "cfr.mkv", split="pool")
+    shutil.copy(clips / "cfr.mkv", clips / "copy_of_cfr.mkv")
+    with pytest.raises(ValueError, match="already ingested as media/clips/cfr.mkv"):
+        core.ingest(m, clips / "copy_of_cfr.mkv", split="test")
+
+
+def test_two_copies_in_one_ingest_are_refused(m: Master, clips: Path) -> None:
+    shutil.copy(clips / "cfr.mkv", clips / "copy_of_cfr.mkv")
+    with pytest.raises(ValueError, match="same file"):
+        core.ingest(m, clips, split="pool")
+    assert m.sql("SELECT count(*) FROM media").fetchall()[0] == (0,)
 
 
 def test_media_outside_the_workspace_is_refused(m: Master, tmp_path: Path, clips: Path) -> None:
@@ -117,3 +140,20 @@ def test_sample_needs_an_ingest_run(m: Master, clips: Path) -> None:
 def test_len_of_a_run_without_a_frame_set_is_an_error(m: Master, clips: Path) -> None:
     with pytest.raises(TypeError, match="no frame set"):
         len(core.ingest(m, clips, split="pool"))
+
+
+def test_sample_refuses_a_bool_as_fps(m: Master, clips: Path) -> None:
+    pool = core.ingest(m, clips, split="pool")
+    with pytest.raises(ValueError, match="fps"):
+        core.sample(m, pool, fps=True)
+
+
+def test_ingest_takes_a_list_of_files(m: Master, clips: Path) -> None:
+    run = core.ingest(m, [clips / "cfr.mkv", clips / "still.jpg"], split="test")
+    assert sorted(run.media().df()["path"]) == ["media/clips/cfr.mkv", "media/clips/still.jpg"]
+    assert run.config["source"] == ["media/clips/cfr.mkv", "media/clips/still.jpg"]
+    with pytest.raises(ValueError, match="twice"):
+        core.ingest(m, [clips / "vfr.mkv", clips / "vfr.mkv"], split="test")
+    with pytest.raises(FileNotFoundError):
+        core.ingest(m, [clips / "nope.mkv"], split="test")
+

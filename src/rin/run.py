@@ -57,6 +57,10 @@ class Run:
         """Which frame (and kind) each row of `vectors()` belongs to."""
         return self.table("embeddings")
 
+    def instances(self) -> duckdb.DuckDBPyRelation:
+        """The boxes (and masks) this run found or drew, in [0, 1] coordinates."""
+        return self.table("instances")
+
     def vectors(self) -> Float[np.ndarray, "rows dim"]:
         """The run's embeddings.npy, read lazily from disk. Row r belongs to the `embeddings`
         row whose `row` is r."""

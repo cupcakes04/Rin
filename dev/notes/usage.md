@@ -101,7 +101,7 @@ pool.frames()         # about 216k rows: (media_id, frame_idx, pts)
 
 ```python
 frames = core.sample(m, pool, fps=2)          # 2 fps keeps 28-39% more after dedupe than 1 fps (M2)
-len(frames)                                   # 14,424 (2 cameras × 3600 s × 2)
+len(frames)                                   # 14,424: 24 clips × 601 (t = 0, 0.5, ..., 300 s of a 300.2 s clip)
 ```
 
 - **What:** a frame set: the frame on screen every 0.5 s by timestamp. On MEVA's steady 30 fps that is every 15th frame; on variable-rate footage it is still the right frame.
@@ -173,7 +173,7 @@ test_frames = curate.random(m, core.sample(m, test, fps=2), n=300, seed=0)   # p
 ```python
 test_labels = sam3.concept(
     m, test_frames,
-    prompts={"person": ["person"]},          # class -> prompt texts (v1 CR-26: several texts may map to one class)
+    prompts={"person": "person"},            # class -> one prompt text (two texts would find each person twice)
     checkpoint="workspace/checkpoints/sam3/sam3.pt",
     score_floor=0.1,                         # keep nearly everything; gates come later (D-26)
     masks=True,

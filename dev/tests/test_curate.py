@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import time
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -96,7 +98,7 @@ def _fake_job(group: int) -> object:
     """Stands in for job.py: the vector of a frame is one-hot of (gray level // 8 // group), read
     back from the cached JPEG, so frames in the same group of `group` frames are identical."""
 
-    def run(spec_file: Path) -> None:
+    def run(_job_dir: Path, spec_file: Path) -> None:
         spec = json.loads(spec_file.read_text())
         rows = []
         for kind in spec["what"]:
@@ -115,7 +117,7 @@ def _fake_job(group: int) -> object:
 
 
 def test_embed_files_the_jobs_vectors_as_a_run(m: Master, every_frame: Run, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(DINO_MODULE, "_run_job", _fake_job(group=4))
+    monkeypatch.setattr(DINO_MODULE, "run_job", _fake_job(group=4))
     emb = dinov3.embed(m, every_frame, model="facebook/dinov3-test", what=["cls", "mean_patch"])
 
     n = len(every_frame)
@@ -123,7 +125,8 @@ def test_embed_files_the_jobs_vectors_as_a_run(m: Master, every_frame: Run, monk
     index = emb.embeddings().df()
     assert list(index["row"]) == list(range(2 * n))
     assert list(index["kind"]) == ["cls"] * n + ["mean_patch"] * n
-    assert sorted(p.name for p in m.layout.run_dir(emb.id).iterdir()) == ["embeddings.npy", "embeddings.parquet", "run.json"]
+    files = sorted(p.name for p in m.layout.run_dir(emb.id).iterdir() if p.name != "src.diff")
+    assert files == ["embeddings.npy", "embeddings.parquet", "run.json"]
     assert emb.info["checkpoint"] == "abc123" and emb.info["code"]["transformers"] == "fake"
     assert emb.config == {"size": [896, 512], "what": ["cls", "mean_patch"], "batch_size": 32}
 
@@ -139,10 +142,10 @@ def test_embed_checks_arguments_before_any_work(m: Master, every_frame: Run, kwa
 
 
 def test_a_failed_job_leaves_no_run(m: Master, every_frame: Run, monkeypatch: pytest.MonkeyPatch) -> None:
-    def crash(_spec: Path) -> None:
+    def crash(_job_dir: Path, _spec: Path) -> None:
         raise RuntimeError("The DINOv3 job failed (exit code 1)")
 
-    monkeypatch.setattr(DINO_MODULE, "_run_job", crash)
+    monkeypatch.setattr(DINO_MODULE, "run_job", crash)
     before = {r for (r,) in m.sql("SELECT run_id FROM runs").fetchall()}
     with pytest.raises(RuntimeError, match="job failed"):
         dinov3.embed(m, every_frame, model="facebook/dinov3-test")
@@ -151,7 +154,7 @@ def test_a_failed_job_leaves_no_run(m: Master, every_frame: Run, monkeypatch: py
 
 
 def test_dedupe_drops_frames_like_the_last_kept_one(m: Master, every_frame: Run, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(DINO_MODULE, "_run_job", _fake_job(group=4))
+    monkeypatch.setattr(DINO_MODULE, "run_job", _fake_job(group=4))
     emb = dinov3.embed(m, every_frame, model="facebook/dinov3-test")
     cands = curate.dedupe(m, every_frame, emb, cosine_max=0.95)
 
@@ -162,7 +165,7 @@ def test_dedupe_drops_frames_like_the_last_kept_one(m: Master, every_frame: Run,
 
 def test_dedupe_needs_a_vector_for_every_frame(m: Master, clips: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     pool = core.ingest(m, clips, split="pool")
-    monkeypatch.setattr(DINO_MODULE, "_run_job", _fake_job(group=4))
+    monkeypatch.setattr(DINO_MODULE, "run_job", _fake_job(group=4))
     emb = dinov3.embed(m, core.sample(m, pool, fps=1), model="facebook/dinov3-test")
     with pytest.raises(ValueError, match="no 'cls' vector"):
         curate.dedupe(m, core.sample(m, pool, fps=10), emb, cosine_max=0.95)
@@ -173,8 +176,9 @@ def test_dedupe_needs_a_vector_for_every_frame(m: Master, clips: Path, monkeypat
 
 def test_importing_rin_loads_no_model_framework() -> None:
     code = (
-        "import sys, rin, rin.curate, rin.servants.frame_cache, rin.servants.dinov3\n"
-        "loaded = [m for m in ('torch', 'transformers', 'torchvision') if m in sys.modules]\n"
+        "import sys, rin, rin.curate, rin.servants.frame_cache, rin.servants.dinov3, rin.servants.sam3\n"
+        "loaded = [m for m in ('torch', 'transformers', 'torchvision', 'sam3', 'sam3_engine', 'pycocotools')"
+        " if m in sys.modules]\n"
         "assert not loaded, loaded"
     )
     subprocess.run([sys.executable, "-c", code], check=True)
@@ -184,13 +188,13 @@ def test_vectors_with_nan_are_refused(m: Master, every_frame: Run, monkeypatch: 
     """DINOv3 in pure float16 overflowed to NaN on every frame; such a run must never be filed."""
     fake = _fake_job(group=4)
 
-    def nan_job(spec_file: Path) -> None:
-        fake(spec_file)
+    def nan_job(job_dir: Path, spec_file: Path) -> None:
+        fake(job_dir, spec_file)
         vectors = np.load(spec_file.parent / "embeddings.npy")
         vectors[3] = np.nan
         np.save(spec_file.parent / "embeddings.npy", vectors)
 
-    monkeypatch.setattr(DINO_MODULE, "_run_job", nan_job)
+    monkeypatch.setattr(DINO_MODULE, "run_job", nan_job)
     with pytest.raises(RuntimeError, match="non-finite"):
         dinov3.embed(m, every_frame, model="facebook/dinov3-test")
     assert not any(m.layout.tmp.iterdir())
@@ -201,7 +205,7 @@ def test_center_removes_each_cameras_mean(m: Master, clips: Path, monkeypatch: p
         return {"camera": "A" if path.stem == "cfr" else "B"}
 
     frames = core.sample(m, core.ingest(m, clips, split="pool", describe=camera_of), fps=10)
-    monkeypatch.setattr(DINO_MODULE, "_run_job", _fake_job(group=4))
+    monkeypatch.setattr(DINO_MODULE, "run_job", _fake_job(group=4))
     emb = dinov3.embed(m, frames, model="facebook/dinov3-test", what=["cls", "mean_patch"])
     centred = curate.center(m, emb)
 
@@ -212,4 +216,116 @@ def test_center_removes_each_cameras_mean(m: Master, clips: Path, monkeypatch: p
         np.testing.assert_allclose(after[r], before[r] - before[r].mean(axis=0), atol=1e-3)
         np.testing.assert_allclose(after[r].mean(axis=0), 0, atol=1e-3)
     assert list(index.sort_values("row")["kind"]) == list(emb.embeddings().df()["kind"])
-    assert centred.inputs == [emb.id] and centred.info["model"] == "facebook/dinov3-test"
+    assert centred.inputs == [emb.id] and centred.info["model"] is None  # a rule; the model is on its input
+
+
+def test_center_refuses_a_camera_with_one_frame(m: Master, clips: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """One frame minus its own mean is a zero vector, which dedupe can't compare."""
+    def camera_of(path: Path) -> dict:
+        return {"camera": "alone" if path.suffix == ".jpg" else "A"}
+
+    frames = core.sample(m, core.ingest(m, clips, split="pool", describe=camera_of), fps=10)
+    monkeypatch.setattr(DINO_MODULE, "run_job", _fake_job(group=4))
+    emb = dinov3.embed(m, frames, model="facebook/dinov3-test")
+    with pytest.raises(ValueError, match="camera alone has a single 'cls' vector"):
+        curate.center(m, emb)
+    assert not any(m.layout.tmp.iterdir())
+
+
+def test_dedupe_refuses_zero_vectors(m: Master, every_frame: Run, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A zero vector used to become NaN and silently drop every later frame of its stream."""
+    fake = _fake_job(group=4)
+
+    def zero_job(job_dir: Path, spec_file: Path) -> None:
+        fake(job_dir, spec_file)
+        vectors = np.load(spec_file.parent / "embeddings.npy")
+        vectors[0] = 0
+        np.save(spec_file.parent / "embeddings.npy", vectors)
+
+    monkeypatch.setattr(DINO_MODULE, "run_job", zero_job)
+    emb = dinov3.embed(m, every_frame, model="facebook/dinov3-test")
+    with pytest.raises(ValueError, match="all-zero"):
+        curate.dedupe(m, every_frame, emb, cosine_max=0.9)
+
+
+@pytest.mark.parametrize("bad", [True, False])
+def test_bools_are_not_numbers(m: Master, every_frame: Run, bad: bool) -> None:
+    with pytest.raises(ValueError, match="cosine_max"):
+        curate.dedupe(m, every_frame, every_frame, cosine_max=bad)
+
+
+def test_a_run_times_its_own_work(m: Master, every_frame: Run, monkeypatch: pytest.MonkeyPatch) -> None:
+    """started_at is stamped before the step's work, so finished_at - started_at is what it cost."""
+    scores_module = sys.modules["rin.curate.scores"]
+    real = scores_module.read_frames
+
+    def slow(*args: object, **kwargs: object):  # noqa: ANN202
+        time.sleep(0.1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(scores_module, "read_frames", slow)
+    run = curate.score_frames(m, every_frame, ["dark"])
+    took = datetime.fromisoformat(run.info["finished_at"]) - datetime.fromisoformat(run.info["started_at"])
+    assert took.total_seconds() >= 0.1 * 3  # three media, each read once
+
+
+def test_an_empty_cached_frame_is_decoded_again(m: Master, every_frame: Run) -> None:
+    first = cached_frames(m, every_frame)
+    _, _, path = first[0]
+    path.write_bytes(b"")  # what a crash before the data reached the disk could leave
+    cached_frames(m, every_frame)
+    assert path.stat().st_size > 0
+
+
+def test_stray_partial_frames_are_reported(m: Master, every_frame: Run) -> None:
+    media_id, _, path = cached_frames(m, every_frame)[0]
+    (path.parent / "3.jpg.999.partial").write_bytes(b"x")
+    with pytest.warns(UserWarning, match="unfinished frame file"):
+        cached_frames(m, every_frame)
+
+
+# --- random ----------------------------------------------------------------------------------
+
+
+def test_random_draws_n_distinct_frames_in_a_ranked_order(m: Master, every_frame: Run) -> None:
+    picked = curate.random(m, every_frame, n=10, seed=3)
+    df = picked.frame_set().df()
+    assert len(df) == 10 and sorted(df["rank"]) == list(range(10))
+    assert not df.duplicated(["media_id", "frame_idx"]).any()
+    every = set(map(tuple, every_frame.frame_set().df()[["media_id", "frame_idx"]].values.tolist()))
+    assert set(map(tuple, df[["media_id", "frame_idx"]].values.tolist())) <= every
+    assert picked.config == {"n": 10, "seed": 3} and picked.inputs == [every_frame.id]
+
+
+def test_random_with_the_same_seed_picks_the_same_frames(m: Master, every_frame: Run) -> None:
+    def order(run: Run) -> list:
+        return run.frame_set().df().sort_values("rank")[["media_id", "frame_idx"]].values.tolist()
+
+    assert order(curate.random(m, every_frame, n=5, seed=0)) == order(curate.random(m, every_frame, n=5, seed=0))
+    assert order(curate.random(m, every_frame, n=5, seed=0)) != order(curate.random(m, every_frame, n=5, seed=1))
+
+
+@pytest.mark.parametrize(("n", "seed", "error"), [(0, 0, "between 1"), (10_000, 0, "between 1"), (True, 0, "n must"), (5, -1, "seed")])
+def test_random_refuses_bad_arguments(m: Master, every_frame: Run, n: object, seed: object, error: str) -> None:
+    with pytest.raises(ValueError, match=error):
+        curate.random(m, every_frame, n=n, seed=seed)
+
+
+# --- union -----------------------------------------------------------------------------------
+
+
+def test_union_holds_every_frame_once(m: Master, clips: Path) -> None:
+    a = core.sample(m, core.ingest(m, clips / "cfr.mkv", split="test"), fps=10)
+    b = core.sample(m, core.ingest(m, clips / "vfr.mkv", split="test"), fps=4)
+    a_again = curate.random(m, a, n=5, seed=0)  # overlaps a
+    both = curate.union(m, [a, b, a_again])
+    frames = both.frame_set().df()
+    assert len(frames) == len(a) + len(b) and not frames.duplicated(["media_id", "frame_idx"]).any()
+    assert frames["rank"].isna().all() and both.inputs == [a.id, b.id, a_again.id]
+
+
+@pytest.mark.parametrize("bad", ["one", "twice"])
+def test_union_refuses_one_set_or_the_same_set_twice(m: Master, every_frame: Run, bad: str) -> None:
+    with pytest.raises(ValueError, match="at least two" if bad == "one" else "twice"):
+        curate.union(m, [every_frame] if bad == "one" else [every_frame, every_frame])
+

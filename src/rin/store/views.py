@@ -4,6 +4,8 @@ Views are rebuilt before every query, so a run written a moment ago is always vi
 reads a file pattern (`runs/*/media.parquet`), so the query text stays the same size however
 many runs exist. A table no run has written yet is an empty view with the right columns, so
 queries on a new store work instead of failing (DuckDB refuses a pattern that matches nothing).
+Files are matched by column name, not position: a column added to a table later reads as null
+in older runs' files instead of breaking every query on them.
 """
 
 from __future__ import annotations
@@ -23,7 +25,8 @@ def refresh(con: duckdb.DuckDBPyConnection, layout: Layout) -> None:
         pattern = f"*/{name}.parquet"
         if any(layout.runs.glob(pattern)):
             con.execute(
-                f"CREATE OR REPLACE VIEW {name} AS SELECT * FROM read_parquet({_quoted(str(layout.runs / pattern))})"
+                f"CREATE OR REPLACE VIEW {name} AS SELECT * FROM "
+                f"read_parquet({_quoted(str(layout.runs / pattern))}, union_by_name = true)"
             )
         else:
             con.register(f"_empty_{name}", stored_schema(name).empty_table())

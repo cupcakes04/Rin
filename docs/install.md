@@ -1,6 +1,6 @@
 # Installing Rin
 
-Rin runs on Linux (developed on WSL2 with one 16 GB GPU). This page sets up the **core environment** (the store, ingest, sampling, curation) and, in section 6, the DINOv3 environment. Each model gets its own separate environment, added to this page when its servant is built.
+Rin runs on Linux (developed on WSL2 with one 16 GB GPU). This page sets up the **core environment** (the store, ingest, sampling, curation) and, in sections 6 and 7, the DINOv3 and SAM3 environments. Each model gets its own separate environment, added to this page when its servant is built.
 
 ## What you need first
 
@@ -78,3 +78,16 @@ uv sync --locked --project src/rin/servants/dinov3
 Check: `src/rin/servants/dinov3/.venv/bin/python -c "import torch; print(torch.cuda.is_available())"` prints `True`. If it prints `False`, the NVIDIA driver doesn't support CUDA 13.0; `nvidia-smi` shows the version it supports.
 
 The weights load from the Hugging Face cache. DINOv3 is gated: accept its licence on the [model page](https://huggingface.co/facebook/dinov3-vitl16-pretrain-lvd1689m), run `hf auth login` once, then `hf download facebook/dinov3-vitl16-pretrain-lvd1689m`.
+
+## 7. The SAM3 environment (GPU)
+
+`sam3.concept` runs SAM3 in a separate environment, defined in `src/rin/servants/sam3/pyproject.toml`: the user's engine `vendors/sam3_engine` (installed editable, so it runs the submodule's code), PyTorch for CUDA 13.0, and `numpy<2`, which the engine needs and the core can't share. Fetch the engine, then create the environment (the first `concept` call also creates it):
+
+```bash
+git submodule update --init vendors/sam3_engine
+uv sync --locked --project src/rin/servants/sam3
+```
+
+Check: `src/rin/servants/sam3/.venv/bin/python -c "import torch, sam3_engine; print(torch.cuda.is_available())"` prints `True`.
+
+The checkpoint is not downloaded by Rin: put `sam3.pt` from [facebook/sam3](https://huggingface.co/facebook/sam3) (gated: accept the licence first) in `workspace/checkpoints/sam3/`, and pass its path to `concept`.

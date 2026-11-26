@@ -75,9 +75,11 @@ flowchart LR
 
 **D-29 · Frame images are decoded once into a cache in the store** (`store/frames/<media_id>/<frame_idx>.jpg`), the first time a servant needs them. Derived data: safe to delete. *Why:* no servant environment needs its own video decoding. *Cost:* JPEG is a second lossy compression; identical for every model, so comparisons stay fair.
 
-**D-30 · The test set is a random sample of the test day, never curated, and a person checks every frame.** Empty frames stay in. *Why:* a curated test set rewards the method that curated it; empty frames are where false positives show up.
+**D-30 · The test set is a random sample of the test footage (D-32), never curated, and a person checks every frame.** Empty frames stay in. *Why:* a curated test set rewards the method that curated it; empty frames are where false positives show up.
 
-**D-31 · Students pick their checkpoint on a fixed val split: whole recordings held out from the pool day.** Ingested as `split="val"`, so selection never sees them. Labelled by SAM3 and not checked by a person: val only chooses `best.pt`, it never scores anything. Every method, seed and budget uses the same val set and trains on all N of its frames. Which clips: chosen in M4. *Why:* Ultralytics needs a val set to pick a checkpoint. Using the test set would leak it into training; carving val out of the N selected frames splits by frame (D-13) and shrinks every budget.
+**D-31 · Students pick their checkpoint on a fixed val split: whole recordings from a different hour of the pool day**, same cameras. Ingested as `split="val"`, so selection never sees them. Labelled by SAM3 and not checked by a person: val only chooses `best.pt`, it never scores anything. Every method, seed and budget uses the same val set and trains on all N of its frames. Which hour: chosen in M4. *Why:* Ultralytics needs a val set to pick a checkpoint. Using the test set would leak it into training; carving val out of the N selected frames splits by frame (D-13) and shrinks every budget; clips from the pool's own hour sit seconds from pool clips (same people, same places), so val would flatter whichever checkpoint memorised them (audit 2026-11-26).
+
+**D-32 · The test set comes from several days, none of them the pool day.** Random frames (D-30) from five 15-minute windows of G299 and G330: 2018-03-09 10:10, 03-11 11:15, 03-12 10:00, 03-13 15:55, 03-15 14:55 (the clips are listed in `dev/scripts/pull_meva.sh`). Equal windows, so a random draw over all of them is even in expectation. Still 300 frames, checked by a person, never the pool day (D-13). *Why:* the first window alone was one event, a seated assembly of 30–60 people, unlike the pool hour; a test set that is one event measures that event ([m3_sam3_test_day](../research/m3_sam3_test_day/README.md)).
 
 ## Proposed
 
@@ -85,7 +87,7 @@ None right now.
 
 ## Open
 
-**Where a person's clicks and drawn boxes are collected** ([usage B3](usage.md#b3--a-person-checks-it)). FiftyOne tags frames and boxes; whether it can also collect clicks for `sam3.click` and hand-drawn boxes is unchecked. The agent brings one recommendation at the start of M3.
+**Where a person's clicks and drawn boxes are collected** ([usage B3](usage.md#b3--a-person-checks-it)). The agent's recommendation: in FiftyOne, which draws and edits 2D boxes in the open-source app since 1.13 ([docs](https://docs.voxel51.com/user_guide/annotation.html)). FiftyOne stays a disposable copy (D-16): a script reads the drawn boxes back into a `human.annotate` run. No `sam3.click` until drawing boxes proves too slow (D-27's middle step, skipped for now). Becomes Proposed once FiftyOne's drawing is checked on this machine in M3 step 3.
 
 **Which judgment makes a fixed frame count as complete** ([data_model judgments](data_model.md#judgments-a-persons-or-a-rules-verdict), [usage B3–B4](usage.md#b3--a-person-checks-it)). A frame *accept* points at one `run_id`, but once a person has added missed people, the frame's full labels span several runs: SAM3's, `sam3.click`'s and `human.annotate`'s. Accepting it against `test_labels` alone would claim SAM3's run was complete when it wasn't. The agent brings one recommendation at the start of M3, with the question above: the test set (usage B4) can't be frozen without it.
 - **The clicked points, lower priority:** they are what a `sam3.click` box was made from, so keeping them in that run's record costs almost nothing. Later they could serve as human-feedback data (the user's thought, for an RLHF-style loop). Not a goal now.

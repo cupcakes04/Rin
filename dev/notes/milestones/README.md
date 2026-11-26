@@ -2,6 +2,10 @@
 
 > Planned **one ahead** (D-19). The running milestone gets one file, `M<n>.md`: scope, open points, measurements, and its debt to fix. When it is done, what lasts is folded out of it (into `dev/notes/`, or `docs/` for user-facing docs), parked debt moves into the table below, and the file is deleted. The rest stay one line each and are reshaped by what we learn.
 
+**Steps inside a milestone.** A milestone file splits its work into numbered steps, each ending with something the user can check (what pass and fail look like). Only the current step is planned in detail; later steps stay a line or two and are detailed when reached, since each step's result reshapes the next. Work that shares code or data, or that would be checked together anyway, stays one step: splitting is for clear checkpoints, not for its own sake.
+
+**At each milestone start,** read the parked-debt triggers below and the findings marked *kept* for that milestone in the triage of each report in [dev/audits/](../../audits/).
+
 ```mermaid
 flowchart LR
     M3["M3<br/>teacher + checked test set"] --> M4["M4<br/>selection + student"] --> M5["M5<br/>the proof"] --> M6["M6<br/>the loop"]
@@ -10,7 +14,7 @@ flowchart LR
 
 | ID | Milestone | Done when | Status |
 |---|---|---|---|
-| M3 | Teacher + checked test set | SAM3 labels the test day; the user checks them in FiftyOne (D-16) and the judgments are stored; SAM3's cost and misses are measured | next |
+| M3 | Teacher + checked test set | The store is safe for human work; SAM3 labels the test day; the user checks them (D-16) and the judgments are stored; SAM3's cost and misses are measured ([M3.md](M3.md)) | running |
 | M4 | Selection + student | Three selection methods; YOLO export; one student per budget | — |
 | M5 | The proof | mAP against label budget per method, 3 seeds; an honest verdict (D-17) | — |
 | M6 | The loop | Uncertainty mining for round 2 | — |
@@ -28,5 +32,7 @@ Shortcuts that are fine to leave until their trigger happens. Each milestone sta
 | Progress is plain `print` lines | Rin runs as a background job, not in a notebook | Switch to `logging` |
 | Two `ingest` calls at once can both pass the "already ingested" check | Two processes write the store at the same time | A lock file around ingest |
 | A truncated MKV isn't caught (MKV states no frame count) | MKV footage arrives | Compare against the container's duration instead |
-| Launching a job (`uv run` in the servant's folder, streaming its output, checking the exit code) lives inside `dinov3/__init__.py` | A second servant is built (SAM3, M3) | Move it beside `frame_cache.py` as shared plumbing; each caller keeps its own arguments and outputs (D-01) |
 | The frame cache stores full-resolution JPEGs at quality 95: about 0.78 MB per 1080p frame (11 GB for the 2 fps pool) | Disk runs short, or footage grows to many hours | Lower quality, or cache at the largest size a servant reads |
+| `curate.score_frames`' motion is the change between consecutive sampled frames, not scaled by the time between them | Footage with variable frame rate is filtered, or two sampling rates are compared on one motion threshold | Divide by the time gap; re-pick the threshold |
+| `probe` sorts every video's timestamps (needed for MEVA's AVI with B-frames), which could hide a timestamp reset in an MP4 | MP4 or MKV footage arrives | Sort only AVI, or refuse jumps larger than a B-frame reorder |
+| The frame reader decodes from the start of the file, no seeking | Hour-long recordings arrive | Seek to the nearest keyframe before the first wanted frame |
