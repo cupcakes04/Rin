@@ -4,8 +4,6 @@ The user writes freely in [brainstorm.md](brainstorm.md), the inbox. The agent i
 - `raw_<date>.md`: the user's own words, unedited.
 - `processed_<date>.md`: where each point went, with the agent's verdict.
 
-An `audit_<date>.md` (an outside agent's report, from [dev/audit.md](../../audit.md)) is ingested the same way, each finding checked against the code first; it leaves a `processed_<date>.md` and is then deleted.
-
 Once all of a brainstorm's points have landed and the raw text is no longer needed, both files can be deleted; git keeps them.
 
 | Date | Processed | Topic |

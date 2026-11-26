@@ -2,7 +2,7 @@
 
 > The handoff between sessions. The agent rewrites this file at the end of every session ([CLAUDE.md, "How we iterate"](../../CLAUDE.md#how-we-iterate)). Current truth only.
 
-**Updated:** 2026-11-25
+**Updated:** 2026-11-26
 
 ## Phase
 
@@ -17,7 +17,7 @@ flowchart LR
 - **Data:** MEVA slice, sample media and v1 checkpoints in `workspace/` ([heavy_data.md](heavy_data.md)); Sapiens2 1B and DINOv3 ViT-L/16, ViT-H+/16 in the HF cache ([models/](models/README.md)).
 - **M1 and M2 closed** (2026-11-25, user checked). What exists and its rules: [docs/core.md](../../docs/core.md); setup: [docs/install.md](../../docs/install.md). Store, ingest, sampling, the frame reader, `curate.score_frames` / `keep` / `center` / `dedupe`, the frame cache, and the first servant, `dinov3.embed`. 60 CPU tests.
 - **M2's result** ([research/m2_filters_dedupe](../research/m2_filters_dedupe/README.md)): on the 2 fps pool, `motion >= 0.002` keeps 98%; `dedupe` at 0.99 leaves 4,453 candidates. Whole-frame vectors are dominated by the fixed background; centring by camera spreads them, and is for M4's selection.
-- **Working rules** ([CLAUDE.md](../../CLAUDE.md)): the agent may run GPU work; debt is "to fix" (milestone file) or "parked" (with a trigger, [milestones/](milestones/README.md#parked-debt)); a running milestone is one file, `milestones/M<n>.md`; after a milestone the user may give [dev/audit.md](../audit.md) to an outside agent (another model).
+- **Working rules** ([CLAUDE.md](../../CLAUDE.md)): the agent may run GPU work; debt is "to fix" (milestone file) or "parked" (with a trigger, [milestones/](milestones/README.md#parked-debt)); a running milestone is one file, `milestones/M<n>.md`; after a milestone the user may give [dev/audit.md](../audit.md) to an outside agent (another model); its report goes to `dev/audits/` and the agent triages it (process redesigned 2026-11-26 after the first audit).
 - The inbox [brainstorms/brainstorm.md](brainstorms/brainstorm.md) is empty.
 
 ## Next
@@ -25,11 +25,12 @@ flowchart LR
    - the two open questions in [decisions.md](decisions.md#open): where a person's clicks and drawn boxes are collected; which judgment makes a fixed frame complete;
    - the parked-debt triggers: "a second servant is built" fires in M3 (move the job launch beside `frame_cache.py`);
    - v1's SAM3 notes ([models/](models/README.md#v1-notes-worth-reading-before-writing-a-servant)) and the M3 rows of [lessons/rin_v1.md](lessons/rin_v1.md) (geometry check, RLE to polygon);
-   - `who` can already be passed to a run (`RunWriter(who=...)`).
-2. Optional, before M3: an outside audit with [dev/audit.md](../audit.md).
+   - `who` can already be passed to a run (`RunWriter(who=...)`);
+   - two points of the agent's own, checked in code on 2026-11-26: `curate.dedupe` silently drops the rest of a stream after a zero vector (NaN after normalising; `curate.center` makes exact zeros for a one-frame group), and from M3 the store holds a person's work while `media_id` is random and the docs call the store safe to delete.
+2. The first audit ([dev/audits/2026-11-26.md](../audits/2026-11-26.md)) is not triaged and not carried into the plan.
 
 ## Waiting on the user
-- Commit: `src/` (new: `curate/`, `media/reader.py`, `servants/`), `dev/` (new: `research/m2_filters_dedupe/`, `tests/test_curate.py`; deleted: `notes/milestones/M2/`), `docs/`, `dev/audit.md`, `pyproject.toml`, `uv.lock`, `CLAUDE.md`.
+- Commit: `CLAUDE.md`, `dev/audit.md`, `dev/audits/` (new; delete `2026-11-26.md` first if you'd rather not keep it), `dev/notes/brainstorms/README.md`, `dev/notes/state.md`.
 
 ## Vendor feature requests (to the user)
 None open.

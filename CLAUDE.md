@@ -26,7 +26,7 @@ flowchart LR
    - file each point under `dev/notes/`;
    - add a dated `processed_*.md` (where each point went) and a `raw_*.md` (the user's text) to `dev/notes/brainstorms/`;
    - empty the inbox.
-3. If an `audit_*.md` is in `dev/notes/brainstorms/`, ingest it the same way: verify each finding against the code before accepting it, file it or reject it with a reason in the `processed_*.md`, then delete the report (git keeps it).
+3. If a report in `dev/audits/` has no "Triage" section yet, triage it (see "Audits").
 4. Confirm the next step with the user before coding.
 
 **Session end:**
@@ -34,7 +34,11 @@ flowchart LR
 2. Update the decisions, ideas and milestone file the work touched.
 3. Compact: delete what no longer holds.
 
-**Audits:** after a milestone, the user may give [dev/audit.md](dev/audit.md) to an outside agent, on purpose another model, in a fresh session. It reads widely and writes one report to the brainstorms folder. Breadth over precision by design: the engineering session verifies each finding at ingest. The prompt stays short so the engineer doesn't frame the auditor; the agent never runs an audit itself.
+**Audits:** after a milestone, the user may give [dev/audit.md](dev/audit.md) to an outside agent, on purpose another model (its blind spots differ from Claude's), in a fresh session. It reads widely and writes one report to `dev/audits/<date>.md`. Not to the inbox: the inbox is the user's voice, a report is another model's view. Breadth is the auditor's job, precision the engineering session's:
+- **The prompt never says what to look for**, only how to write a finding down (file and line). Steering the auditor makes it look where the agent would, which defeats using another model.
+- **The report is a perspective, not a to-do list.** At triage the agent verifies against the code only the findings that would change the next milestone or an agreed decision, and gives the user a short triage in chat. The user decides what becomes work; that work goes where any work goes (milestone file, decisions).
+- **The record** is a short "Triage" section the agent appends to the report: each finding accepted, kept for a later milestone (read again when that milestone is planned), or rejected, one line each with a reason. Nothing else is filed into the notes (D-19).
+- The agent never runs an audit itself.
 
 **Inbox vs chat:** the inbox is for big things: new intent, new ideas, changes of direction. Day-to-day milestone work (questions, feedback, small calls) happens in chat as usual, and follows the same loop on a smaller scale.
 
@@ -49,7 +53,7 @@ flowchart TB
     R --> DOCS["docs/<br/>the repo's real docs (from M1)"]
     R --> V["vendors/"]
     R --> W["workspace/<br/>(gitignored)"]
-    DEV --> N["notes/"] & RS["research/"] & SC["scripts/"] & T["tests/"] & V1["rin_v1/ (gitignored)"]
+    DEV --> N["notes/"] & RS["research/"] & AU["audits/"] & SC["scripts/"] & T["tests/"] & V1["rin_v1/ (gitignored)"]
 ```
 
 | Path | What |
@@ -61,6 +65,7 @@ flowchart TB
 | `dev/research/` | Experiment write-ups: the question, the run ids, small result tables and plots, the verdict. Raw runs stay in `workspace/store/` |
 | `dev/scripts/` | Small runnable helpers (e.g. `pull_meva.sh`) |
 | [dev/audit.md](dev/audit.md) | The short prompt for an outside audit (see "Audits" above) |
+| `dev/audits/` | Outside audit reports, one per audit, each ending with the agent's triage |
 | `dev/tests/` | Tests (from M1) |
 | `dev/rin_v1/` | Old repo, read-only reference, gitignored (see "Using rin_v1") |
 | `docs/` | The repo's real documentation for someone using Rin: installation, usage. Starts in M1, when there is something to install |
