@@ -1,6 +1,6 @@
 # Where distillation pays: the student's gap, not the scene
 
-**Status:** explored (the user, 2026-11-27, in chat after M4 steps 6b and 6c); the agent's recommendation for M5 below waits on the user's yes.
+**Status:** adopted (D-17, the user's yes 2026-11-27): M5 is the proof on a rare concept. Rarity first, crowds after as their own step ([crowd_labelling](crowd_labelling.md)): one loop, two parts of it.
 
 **The doubt.** Stock yolo26s already detects people in the gym well: 0.629 mAP50-95 and the best mAP50 of any model on the checked test set, while students trained on SAM3's labels gain at most 0.03 ([m4_first_curve](../../research/m4_first_curve/README.md)). Person is COCO's home turf. Tuning on a teacher should pay where the stock student is weak: a specific domain (one particular camera, an odd viewpoint), or a concept COCO doesn't have, which SAM3 can label from a text prompt. So maybe Rin's point isn't to make existing tasks better, but to bring odd, domain-specific tasks up to par.
 
@@ -23,7 +23,7 @@ flowchart LR
 
 **Recommended M5: the proof on a rare concept COCO lacks, in long fixed-camera footage.**
 1. **Pick the concept by screening:** absent from COCO (so stock starts near zero); rare in time but present dozens of times in the pool; labelled reasonably by SAM3 (spot-checked); present on test days too; easy for a person to check. MEVA first (other sites, outdoor cameras, other hours); another dataset if no concept fits.
-2. **A checked test set** for it, as in M3 but sparse. How to draw test frames when positives are rare (random frames hold few) is a design question for M5.
+2. **A checked test set** for it, as in M3 but sparse. Positives are rare, so random frames hold few: draw the test *clips or hours* where the concept occurs (chosen by a person or by footage facts, never by SAM3 or DINOv3, D-30), sample frames uniformly inside them, and keep plenty of negatives so false positives stay measurable (follow-up audit 2026-11-27 §4).
 3. **The curve:** methods × low budgets × 3 seeds, judged on the concept's AP.
 
-**Cost.** D-17's "class person first" changes; a new pool and test footage; a person checks a new test set. Risk: SAM3 may be weak on the chosen concept, which the screening measures before anything is built on it.
+**Cost.** D-17's "class person first" changes; a new pool and test footage; a person checks a new test set. Risks: SAM3 may be weak on the chosen concept, which the screening measures before anything is built on it. A small, local concept (something carried, a vest) barely moves a whole-frame DINOv3 vector, so whole-frame selection may miss it where text search or foreground features ([holy_grail §4](holy_grail.md#4-the-main-risk-fixed-cameras)) wouldn't; the screening should look at that too.

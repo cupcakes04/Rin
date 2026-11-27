@@ -65,7 +65,7 @@ Imports: `from rin import Master, core, curate, evaluate, export, human, viewer`
 - **Ingest refuses:** a file already ingested, by path or by content (a copy under another name); a file outside `workspace/` (paths are stored relative to it, so store and media move together); a file whose header frame count differs from the decoded count (cut short or corrupt; AVI and MP4 only, MKV states no count); a `describe` result with unknown keys, wrong types, or a `started_at` with a timezone. All files are checked before any is decoded.
 - **Frames are decoded in one place.** `rin.media.read_frames` decodes front to back with the same decoding `probe` counts with, so frame k is always the same picture (checked on a MEVA clip: frame 4,500 is pixel-identical to ffmpeg's frame 4,500). It never seeks (seeking lands on a keyframe and counts from there, which B-frame AVIs get wrong).
 - **Servants read the frame cache, never video.** Before a servant's job starts, the frames it needs are decoded once into `store/frames/<media_id>/<frame_idx>.jpg` (JPEG quality 95). Every model sees the same pixels. Derived data: safe to delete.
-- **Boxes are checked when written:** inside [0, 1] with positive width and height, or the run is refused. Nothing is clamped, so a pixel-conversion bug fails loudly.
+- **Boxes are checked when written:** inside [0, 1] with positive width and height, or the run is refused. The store clamps nothing, so a pixel-conversion bug fails loudly; only `yolo.predict` moves edges within 1e-6 of [0, 1] onto it (float32 rounding) before writing.
 - **A servant is two halves** in one folder, e.g. `src/rin/servants/dinov3/`: the caller (`__init__.py`, core environment: checks arguments, caches frames, files the run) and the job (`job.py`, its own environment from the `pyproject.toml` beside it: imports nothing from Rin, writes raw arrays). If the job fails, no run is filed. The run records the job's model revision (`checkpoint`) and library versions (`code`).
 - **A run is all or nothing.** It is written into `tmp/`, checked against the table's columns, pushed to disk (`fsync`), then moved into `runs/` in one step. A run that fails, or a hard crash, leaves nothing in `runs/`. Cached frames are written the same way.
 - **A run records what made it:** Rin's git commit, and if `src/` had uncommitted changes, those changes as `src.diff` in the run folder. `started_at` to `finished_at` covers the step's work, frame caching included.
@@ -102,7 +102,7 @@ flowchart TB
       SAM["core/sample.py<br/>media → frame set"]
       EXP["export/yolo.py · coco.py<br/>dataset → YOLO files · truth → COCO"]
       EVA["evaluate/coco.py<br/>predictions vs truth → metrics"]
-      CUR["curate/scores.py · dedupe.py · center.py ·<br/>random_frames.py · union.py · select.py ·<br/>streams.py (one camera, day, split)"]
+      CUR["curate/scores.py · dedupe.py · center.py ·<br/>random_frames.py · union.py · difference.py ·<br/>select.py · streams.py (one camera, day, split)"]
     end
     subgraph servants["rin.servants: model steps"]
       DIN["dinov3/ · sam3/ · yolo/<br/>__init__.py caller · job.py job (own env)"]
@@ -115,7 +115,7 @@ flowchart TB
       HU["human/annotate.py<br/>drawn boxes → run"]
     end
     subgraph handles["handles"]
-      MAS["master.py · Master<br/>the store: sql(), run(), runs()"]
+      MAS["master.py · Master<br/>the store: sql(), run(), runs(), delete()"]
       RUN["run.py · Run<br/>what every step returns"]
       DS["dataset.py · Dataset<br/>m.dataset(): frames + gated boxes"]
     end

@@ -6,7 +6,7 @@
 A run is kept when the current notes, write-ups, scripts or docs cite it (full id, or a 4-character
 suffix no other run shares), when it is a person's work or an ingest, when a kept run depends on
 it, or when it is a prediction or score of a kept model (the numbers write-ups report). Audit
-reports don't count: they are read once, at triage. Everything else is listed, newest first.
+reports don't count: they are read once, at triage. Everything else is listed, and deleted children before parents.
 """
 import re
 import sys
@@ -43,7 +43,13 @@ while grew:
         if r not in keep:
             keep.add(r)
             todo.extend(runs[r][1])
-gone = sorted(set(runs) - keep, reverse=True)  # newest first: children before parents
+gone_set = set(runs) - keep
+# Children before parents (run ids alone can't order runs started in the same second).
+gone = []
+while gone_set:
+    leaves = sorted(r for r in gone_set if not any(r in runs[c][1] for c in gone_set))
+    gone += leaves
+    gone_set -= set(leaves)  # newest first: children before parents
 by_step = {}
 for r in gone:
     by_step.setdefault(runs[r][0], []).append(r)

@@ -15,7 +15,7 @@ flowchart TB
     FIL --> EMB["2 · Embed<br/>DINOv3"]
     EMB --> DED["3 · De-duplicate<br/>cosine cutoff"]
     DED --> SEL["4 · Select for coverage<br/>within a label budget N"]
-    SEL --> LAB["5 · Label<br/>SAM3 'person' + quality gates"]
+    SEL --> LAB["5 · Label<br/>SAM3 concept prompt + quality gates"]
     LAB --> CHK["6 · Check<br/>person judges (D-02)"]
     CHK --> TRN["7 · Train student<br/>YOLO (fallback RF-DETR)"]
     TRN --> EVA["8 · Evaluate<br/>fixed, checked test set"]
@@ -29,7 +29,7 @@ flowchart TB
 | 2 Embed | DINOv3 CLS (maybe mean patch) per kept frame | On a fixed camera this may be the wrong signal (§4) |
 | 3 De-duplicate | Drop frames too similar to one already kept | |
 | 4 Select | Spend budget N for coverage of the embedding space | Methods in §3 |
-| 5 Label | SAM3 concept prompt "person" gives boxes and masks | Gates: score floor; drop tiny or frame-filling masks |
+| 5 Label | SAM3 concept prompt (the task's class) gives boxes and masks | Gates: score floor; drop tiny or frame-filling masks |
 | 6 Check | A person accepts or rejects frames and records | Needed above all for the test set |
 | 7 Train | YOLO on the exported set (native format, D-12) | RF-DETR if YOLO hits a dead end |
 | 8 Evaluate | mAP on the fixed test set | §5 |
@@ -76,15 +76,15 @@ This is the most likely place the idea fails at first, and the most interesting 
 
 **Success (D-17):** curated selection reaches random's mAP with half the labels or fewer.
 
-**First point (M4):** random's curve (one seed) rises from stock yolo26s's 0.599 to 0.661 at 1,000 frames, but gains only 0.015 above 250 frames, so the budgets that can decide D-17 lie below about 250 ([m4_first_curve](../../research/m4_first_curve/README.md)).
+**The first task, person in the gym (M1–M4), closed as a finding:** stock yolo26s scores 0.629 on the checked test set and students trained on SAM3's labels reach at most 0.661, mostly on small people ([m4_first_curve](../../research/m4_first_curve/README.md)). With so little room, no selection method can show a difference. Distillation pays where the stock student is weak, so the proof moves to a rare concept COCO lacks (D-17, [where_distillation_pays](where_distillation_pays.md)); the gym's setup below is what M1–M4 used, and M5 picks footage, test set and val for its concept.
 
 | Fixed part | Value |
 |---|---|
-| Class | person |
+| Class | a rare concept COCO lacks, chosen in M5 (M1–M4: person) |
 | Student | yolo26s from the stock checkpoint, `imgsz` 1280, batch 8, 50 epochs, for every method, seed and budget (D-40; fallback RF-DETR) |
-| Pool | MEVA school site, cameras G299 and G330, 2018-03-07, one continuous hour ([../heavy_data.md](../heavy_data.md)) |
-| Test set | Same cameras, **other days**: 300 random frames from five days (D-32), SAM3's labels checked by a person, crowds as ignore regions (D-34); run `20261127-094340-human.annotate-64f9`. Selection never touches it (D-13) |
-| Val set | The pool day's 11:30–11:40, both cameras (308 candidates), SAM3 labels unchecked; only picks each student's checkpoint (D-31) |
+| Pool (M1–M4) | MEVA school site, cameras G299 and G330, 2018-03-07: a busy hour and a quiet half-hour (D-41, [../heavy_data.md](../heavy_data.md)) |
+| Test set (M1–M4) | Same cameras, **other days**: 300 random frames from five days (D-32), SAM3's labels checked by a person, crowds as ignore regions (D-34); run `20261127-094340-human.annotate-64f9`. Selection never touches it (D-13) |
+| Val set (M1–M4) | The pool day's 11:30–11:40 and 17:00–17:10, both cameras (321 candidates), SAM3 labels unchecked; only picks each student's checkpoint (D-31) |
 
 ## 6. Known risks
 
@@ -97,4 +97,5 @@ This is the most likely place the idea fails at first, and the most interesting 
 ## 7. Later
 
 - Text-targeted mining with EmbeddingGemma 2 ("people carrying boxes"): [search.md](search.md).
+- **Crowds, after the rarity proof:** the "checked by a person" step is what crowds make expensive; a labelling-cost problem, not a selection one ([crowd_labelling.md](crowd_labelling.md)).
 - The trained student becomes the cheap screener in step 1, which closes the loop in deployment.

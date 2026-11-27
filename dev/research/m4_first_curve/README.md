@@ -32,19 +32,19 @@ Stock: predictions `20261127-175045-yolo.predict-c01e`, scored `20261127-194939-
 
 **How hard to train** (step 6b; per-camera random, seed 0, selection `20261127-180448-curate.select-e91e`; "steps" are optimizer steps). M4's setting is one step per 8 batches; the others take one step per batch, some with each frame repeated so an epoch shows 250 or 1,000 images (the same 50 epochs and val passes):
 
-| N | Setting | Steps | mAP50-95 | mAP50 | mAP_small | AR100 | False positives per empty frame | Train run |
-|---|---|---|---|---|---|---|---|---|
-| 25 | M4's | 25 | 0.634 | 0.889 | 0.174 | 0.71 | 0.00 | `20261127-183232-yolo.train-468c` |
-| 25 | step per batch | 200 | 0.557 | 0.806 | 0.175 | 0.66 | 1.71 | `20261127-180450-yolo.train-57a5` |
-| 25 | per batch, 250 per epoch | 1,600 | 0.531 | 0.751 | 0.040 | 0.62 | 5.29 | `20261127-181352-yolo.train-9e7c` |
-| 25 | per batch, 1,000 per epoch | 6,250 | 0.517 | 0.734 | 0.037 | 0.61 | 5.87 | `20261127-184148-yolo.train-f64f` |
-| 100 | M4's | 81 | 0.620 | 0.852 | 0.232 | 0.71 | 1.92 | `20261127-183624-yolo.train-f9f0` |
-| 100 | step per batch | 650 | 0.608 | 0.839 | 0.202 | 0.70 | 1.82 | `20261127-180841-yolo.train-369f` |
-| 100 | per batch, 250 per epoch | 1,900 | 0.603 | 0.830 | 0.191 | 0.68 | 1.65 | `20261127-182151-yolo.train-94c3` |
-| 100 | per batch, 1,000 per epoch | 6,250 | 0.570 | 0.810 | 0.102 | 0.65 | 2.05 | `20261127-190408-yolo.train-0eef` |
-| 1,000 | step per batch | 6,250 | 0.630 | 0.843 | 0.241 | 0.71 | 2.19 | `20261127-192636-yolo.train-37db` |
+| N | Setting | Steps | mAP50-95 | mAP50 | mAP_small | AR100 | False positives per empty frame | Best epoch (val) | Train run |
+|---|---|---|---|---|---|---|---|---|---|
+| 25 | M4's | 25 | 0.634 | 0.889 | 0.174 | 0.71 | 0.00 | **1** | `20261127-183232-yolo.train-468c` |
+| 25 | step per batch | 200 | 0.557 | 0.806 | 0.175 | 0.66 | 1.71 | 50 | `20261127-180450-yolo.train-57a5` |
+| 25 | per batch, 250 per epoch | 1,600 | 0.531 | 0.751 | 0.040 | 0.62 | 5.29 | 37 | `20261127-181352-yolo.train-9e7c` |
+| 25 | per batch, 1,000 per epoch | 6,250 | 0.517 | 0.734 | 0.037 | 0.61 | 5.87 | 26 | `20261127-184148-yolo.train-f64f` |
+| 100 | M4's | 81 | 0.620 | 0.852 | 0.232 | 0.71 | 1.92 | 48 | `20261127-183624-yolo.train-f9f0` |
+| 100 | step per batch | 650 | 0.608 | 0.839 | 0.202 | 0.70 | 1.82 | 45 | `20261127-180841-yolo.train-369f` |
+| 100 | per batch, 250 per epoch | 1,900 | 0.603 | 0.830 | 0.191 | 0.68 | 1.65 | 40 | `20261127-182151-yolo.train-94c3` |
+| 100 | per batch, 1,000 per epoch | 6,250 | 0.570 | 0.810 | 0.102 | 0.65 | 2.05 | 17 | `20261127-190408-yolo.train-0eef` |
+| 1,000 | step per batch | 6,250 | 0.630 | 0.843 | 0.241 | 0.71 | 2.19 | 33 | `20261127-192636-yolo.train-37db` |
 
-The repeat option (`yolo.train(epoch_images=...)`) was removed after this measurement; [steps.py](steps.py) needs it to run again (git history has it).
+**The 25-frame run with M4's setting never trained a usable student:** its val score peaked at epoch 1 (0.560), fell to 0.060 by epoch 10 and reached only 0.319 by epoch 50, so `best.pt` is the epoch-1 weights, still stock COCO's person detector; its scores match stock's (follow-up audit, [2026-11-27-m4-followup §1](../../audits/2026-11-27-m4-followup.md)). With one step per batch, val fell to 0.000 at epoch 10 and recovered to 0.578. The repeat option (`yolo.train(epoch_images=...)`) was removed after this measurement; [steps.py](steps.py) needs it to run again (git history has it).
 
 **SAM3 on the same test set** (run `20261126-205940-sam3.concept-11ee`, scored `20261127-194940-evaluate.coco-d670`): mAP50-95 0.966, mAP_small 0.846, 1.3 false positives per empty frame. Not a ceiling for the student: the checked truth started as SAM3's boxes and the person kept most of them, so SAM3 matches it almost by construction. What it does show: the truth carries SAM3's box geometry, and a student trained on SAM3's boxes is rewarded at high IoU for learning it.
 
@@ -52,6 +52,7 @@ The repeat option (`yolo.train(epoch_images=...)`) was removed after this measur
 
 - **Stock yolo26s is already strong here:** 0.629 mAP50-95, the best mAP50 of any model (0.885), and no box on an empty frame. Fine-tuning on unchecked labels gains at most **+0.03 mAP50-95** (1,000 frames), never beats stock on mAP50, and adds boxes on empty frames at most budgets.
 - **Where students do gain is small people:** mAP_small 0.17 → 0.26–0.28 from 250 frames on. Their mAP75 rises too (0.70 → 0.73): part of the overall gain is learning SAM3's box shape, which the truth inherits.
-- **Train gently.** More optimizer steps made students worse at every budget tried: fewer small people found, more boxes on empty frames, lower mAP. The audit's worry (2026-11-27 §1.1) that 50 epochs starved small budgets is measured and rejected; D-40 keeps M4's setting, now stated.
-- **Boxes on empty frames come from training, not from too little of it.** None of these training sets holds an empty frame; the student that trains least (25 frames, 25 steps) puts none, like stock. Quiet frames in the pool (D-41, step 6c) are the direct test.
-- **The curve is too flat and too noisy for D-17 on overall mAP.** One seed: 25 frames (0.634) beat 100 (0.619, 0.620 on two different draws), and the whole range from stock to 1,000 frames is 0.03. "Half the labels" can't be read on mAP50-95 here; mAP_small and false positives per empty frame are the metrics with room to move ([audit 2026-11-27 §4.1](../../audits/2026-11-27.md)).
+- **Train gently, where training works at all.** At 100 and 1,000 frames, every student that trained, trained worse with more optimizer steps: at 100 frames 0.620 with M4's setting against 0.608, 0.603 and 0.570 with more; at 1,000, 0.630 with a step per batch against M4's 0.661 (other frames, same budget). The audit's worry (2026-11-27 §1.1) that 50 epochs starved 100 frames is measured and rejected there; D-40 keeps M4's setting, now stated.
+- **At 25 frames, no setting beat stock.** M4's setting kept the stock weights (best epoch 1); every trained 25-frame student scored below stock (0.517–0.557). Person has a COCO head to fall back on; a concept COCO lacks doesn't, so M5 checks that its smallest budget converges on its own concept before trusting the curve there ([parked debt](../../notes/milestones/README.md#parked-debt)).
+- **Boxes on empty frames come from training, not from too little of it.** None of these training sets holds an empty frame; the only student with none is the 25-frame one that kept the stock weights. Quiet frames in the pool (D-41) are the direct test.
+- **The curve is too flat and too noisy for D-17 on overall mAP.** One seed: 100 frames score 0.619 and 0.620 on two different draws, and the whole range from stock to 1,000 frames is 0.03. "Half the labels" can't be read on mAP50-95 here; mAP_small and false positives per empty frame are the metrics with room to move ([audit 2026-11-27 §4.1](../../audits/2026-11-27.md)).

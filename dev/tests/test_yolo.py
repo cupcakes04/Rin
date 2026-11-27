@@ -123,7 +123,8 @@ def test_predict_hands_classes_to_the_job_and_clamps_rounding(
 
 @pytest.mark.parametrize(
     ("box", "cls", "error"),
-    [([0.1, 0.1, 1.001, 0.5], "person", "outside \\[0, 1\\]"), ([0.1, 0.1, 0.3, 0.5], "chair", "not asked for")],
+    [([0.1, 0.1, 1.001, 0.5], "person", "outside \\[0, 1\\]"), ([0.1, float("nan"), 0.3, 0.5], "person", "outside \\[0, 1\\]"),
+     ([0.1, 0.1, 0.3, 0.5], "chair", "not asked for")],
 )
 def test_predict_refuses_what_the_job_should_not_return(
     m: Master, setup: dict[str, Run], checkpoint: Path, monkeypatch: pytest.MonkeyPatch,  # noqa: F811

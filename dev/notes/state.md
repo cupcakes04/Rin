@@ -8,7 +8,7 @@
 
 ```mermaid
 flowchart LR
-    E["M1 core + ingest<br/>✅ closed"] --> F["M2 filters + embeddings<br/>✅ closed"] --> G["M3 teacher + checked test set<br/>✅ closed"] --> H["M4 selection + student<br/>✅ closed"] --> I["M5 the proof<br/>⏭ the task first, then plan"]
+    E["M1 core + ingest<br/>✅ closed"] --> F["M2 filters + embeddings<br/>✅ closed"] --> G["M3 teacher + checked test set<br/>✅ closed"] --> H["M4 selection + student<br/>✅ closed"] --> I["M5 the proof, rare concept<br/>⏭ plan it"]
     style I fill:#fde68a,color:#000
 ```
 
@@ -25,12 +25,12 @@ flowchart LR
 - **`m.delete(run)`** exists (refuses a run others depend on, and a person's work); superseded M4 runs deleted with the user's yes.
 
 ## Next
-1. **Choose M5's task** with the user: the agent recommends the proof on a rare concept COCO lacks, in long fixed-camera footage ([where_distillation_pays](ideas/where_distillation_pays.md)): screen concepts on MEVA first, then a sparse checked test set, then the curve. Changes D-17's "class person first".
-2. **Then plan M5** from the parked-debt rows triggered by "M5 is planned" ([milestones/](milestones/README.md#parked-debt)); some (lower budgets, cluster counts, empty frames) belong to the gym and are re-read against the new task.
+1. **Plan M5, the proof on a rare concept COCO lacks** (D-17 rewritten, the user's yes 2026-11-27; [where_distillation_pays](ideas/where_distillation_pays.md)). First step: screen candidate concepts on MEVA (other sites, outdoor cameras, other hours): absent from COCO, rare in time but present dozens of times, labelled reasonably by SAM3, on test days too, easy to check. Then a small checked test set, then the curve.
+2. Read the parked-debt rows triggered by "M5 is planned" ([milestones/](milestones/README.md#parked-debt)) against the new task: the generic ones (spread across seeds and windows, box counts per method, cheap baselines, kcenter's outliers, metrics per method) carry over; the gym-specific budgets and cluster counts get re-chosen.
+3. **After M5:** crowds, as the "checked by a person" part of the same loop ([crowd_labelling](ideas/crowd_labelling.md)). Not planned yet (D-19).
 
 ## Waiting on the user
-- **M5's direction:** yes or no to the rare-concept proof (and the gym closing as a finding).
-- **Commit:** everything since `981723f`: the audit and its triage; M4 step 6 (code and tests: `yolo` class filtering, stated optimizer, clamping, dropped no-area boxes; `curate.select` per-camera random; split guards; `curate.difference`; `m.delete`); the 6b and 6c scripts and rewritten write-ups; decisions D-31/38/40/41; `CLAUDE.md`'s audit rule; ideas `where_distillation_pays` and `crowd_labelling`; `docs/core.md`, `usage`, `heavy_data`, `pull_meva.sh`, `superseded_runs.py`; milestones (M4 closed, `M4.md` deleted); this file.
+- **Commit:** the D-17 change of course (decisions, `holy_grail`, `where_distillation_pays`, ideas index, milestones, this file) and the follow-up audit's triage (report, fixes in `yolo/__init__.py`, `test_yolo.py`, `superseded_runs.py`, `docs/core.md`, the 6b write-up, D-40, parked debt).
 
 ## Vendor feature requests (to the user)
 None open.
@@ -39,5 +39,5 @@ None open.
 - Gitignored: `dev/rin_v1/`, `workspace/`, `.venv/`.
 - To re-download MEVA (pool, val, test): `bash dev/scripts/pull_meva.sh` (skips files already on disk).
 - Core environment: `uv sync`; tests: `uv run pytest`. Job environments: `uv sync --locked --project src/rin/servants/<dinov3|sam3|yolo>`. DINOv3's model commit: `ea8dc2863c51be0a264bab82070e3e8836b02d51`.
-- Key runs: pool candidates `20261127-105927-curate.dedupe-6b65`, their embeddings `20261127-104644-dinov3.embed-32fd`, val candidates `20261127-110156-curate.dedupe-f05d`, SAM3 labels for both `20261127-111139-sam3.concept-5477`; the nine selections are listed in [m4_selection](../research/m4_selection/README.md).
+- Key runs (the gym, after M4 step 6c): pool candidates `20261127-210554-curate.dedupe-6a1d`, their embeddings `20261127-205124-dinov3.embed-a983`, val candidates `20261127-210936-curate.dedupe-7cf2`, SAM3 labels `20261127-111139-sam3.concept-5477` plus `20261127-210937-sam3.concept-83bc` (pass both to `m.dataset`); the nine selections are listed in [m4_selection](../research/m4_selection/README.md).
 - `workspace/store` holds a person's work (the test set, the pilot): never delete it to start over; back it up with `dev/scripts/backup_human_runs.sh`. Only its frame cache, `store/frames/`, is safe to delete.

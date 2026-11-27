@@ -136,8 +136,8 @@ def train(
 
 
 def _clamped(box: list[float]) -> list[float]:
-    """The box with edges within BOX_SLACK of [0, 1] moved onto it; an edge farther out raises."""
-    if any(v < -BOX_SLACK or v > 1 + BOX_SLACK for v in box):
+    """The box with edges within BOX_SLACK of [0, 1] moved onto it; an edge farther out, or NaN, raises."""
+    if any(not -BOX_SLACK <= v <= 1 + BOX_SLACK for v in box):
         raise ValueError(f"The job returned a box outside [0, 1]: {box}")
     return [min(max(v, 0.0), 1.0) for v in box]
 
