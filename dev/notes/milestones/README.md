@@ -9,14 +9,14 @@
 ```mermaid
 flowchart LR
     M3["M3<br/>teacher + checked test set"] --> M4["M4<br/>selection + student"] --> M5["M5<br/>the proof"] --> M6["M6<br/>the loop"]
-    style M4 fill:#fde68a,color:#000
+    style M5 fill:#fde68a,color:#000
 ```
 
 | ID | Milestone | Done when | Status |
 |---|---|---|---|
 | M3 | Teacher + checked test set | The store is safe for human work; SAM3 labels the test footage; the user checks every frame and the result is stored; SAM3's cost and misses are measured | closed 2026-11-26: test set `20261127-094340-human.annotate-64f9` ([research](../../research/m3_checked_test_set/README.md)) |
-| M4 | Selection + student | Three ranked selection methods; SAM3 on every candidate; YOLO export and training; COCO scoring of the test set; one student per budget with a test mAP | running: [M4.md](M4.md) |
-| M5 | The proof | mAP against label budget per method, 3 seeds; an honest verdict (D-17) | — |
+| M4 | Selection + student | Three ranked selection methods; SAM3 on every candidate; YOLO export and training; COCO scoring of the test set; one student per budget with a test mAP | closed 2026-11-27: [m4_selection](../../research/m4_selection/README.md), [m4_training_labels](../../research/m4_training_labels/README.md), [m4_first_curve](../../research/m4_first_curve/README.md) |
+| M5 | The proof | mAP against label budget per method, 3 seeds; an honest verdict (D-17) | next: plan it |
 | M6 | The loop | Uncertainty mining for round 2 | — |
 
 What is built so far is described in [docs/](../../../docs/core.md). The API every milestone builds towards is [usage.md](../usage.md), on the data model in [data_model.md](../data_model.md). Both stay in `dev/notes/` as the design target, because they describe parts not built yet. Root `docs/` only describes what exists: each milestone adds what it built there (install, the calls and tables that now work).
@@ -44,7 +44,9 @@ Shortcuts that are fine to leave until their trigger happens. Each milestone sta
 | A student may learn better with crowds as ignore regions in training too (the user's doubt, 2026-11-26); YOLO has no ignore regions, and SAM3 marks no crowds | M5 shows the students' errors gather in crowded frames | Find crowds in training frames (no teacher marks them) and grey them out of the image, or drop those frames |
 | The verdict holds for one student, yolo26s (D-40); the user would like larger YOLO sizes (their GPU fits up to x) and RF-DETR tried too (2026-11-27) | M5's verdict exists (or YOLO hits a dead end, D-17) | Repeat the curve for one larger YOLO and RF-DETR (a `rfdetr.train` servant; RF-DETR wants `train/ valid/ test/` with `_annotations.coco.json`, [lessons](../lessons/rin_v1.md)). Read the user's own RF-DETR engine first: `~/projects/vision_pipeline/src/avp/ai/engines/rfdetr.py` |
 | Random runs on filtered, deduped candidates, not raw frames ([audit §3.2](../../audits/2026-11-26.md#32-random-on-cands-is-not-a-raw-video-random-baseline)) | M5 is planned | Random over raw sampled frames as the main baseline |
-| No N = 0 (stock YOLO) baseline, no uniform-in-time or top-motion baselines ([audit §3.3](../../audits/2026-11-26.md#33-missing-n--0-zero-shot-pretrained-yolo-and-cheap-non-embedding-baselines)) | M5 is planned | One evaluation of stock YOLO; two CPU selection methods |
+| No uniform-in-time or top-motion baselines ([audit §3.3](../../audits/2026-11-26.md#33-missing-n--0-zero-shot-pretrained-yolo-and-cheap-non-embedding-baselines)); stock yolo26s, the N = 0 point, is measured ([m4_first_curve](../../research/m4_first_curve/README.md)) | M5 is planned | Two CPU selection methods |
 | A frame budget can hide a box-count difference between methods ([audit §3.4](../../audits/2026-11-26.md#34-frame-budget-vs-box-count-confound)) | M5 is planned | Log boxes per method; plot mAP against boxes as well as frames |
 | `kcenter` picks the outlier frames where SAM3's unchecked labels are worst ([audit §3.6](../../audits/2026-11-26.md#36-outlier--pseudo-label-noise-trap-kcenter-on-unchecked-sam3-labels)) | M5 is planned | Compare SAM3 scores per method; spot-check about 20 frames each |
-| One mAP number hides where methods differ ([audit §3.7](../../audits/2026-11-26.md#37-single-scalar-map50-95-can-hide-or-distort-the-m5-verdict)) | M5 is planned | Log mAP50, small / medium / large, false positives per empty frame |
+| One mAP number hides where methods differ ([audit §3.7](../../audits/2026-11-26.md#37-single-scalar-map50-95-can-hide-or-distort-the-m5-verdict)) | M5 is planned | `evaluate.coco` already stores mAP50, by size, AR and false positives per empty frame; M5 reports them per method |
+| M4's budgets (100–1,000) sit where random's curve is flat: +0.015 mAP from 250 to 1,000, within noise ([m4_first_curve](../../research/m4_first_curve/README.md)) | M5 is planned | Lower budgets, e.g. 25 / 50 / 100 / 250 / 500 (cheaper too) |
+| The candidate pool holds no empty gym, and small students box ghosts on empty test frames (3.2 per frame at 100 frames, 0.3 at 1,000; stock 0) ([m4_first_curve](../../research/m4_first_curve/README.md)) | M5 is planned | Report false positives per empty frame per method; decide whether the motion filter should keep a share of empty frames, or say in the verdict that it removes them |

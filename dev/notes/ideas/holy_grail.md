@@ -76,13 +76,15 @@ This is the most likely place the idea fails at first, and the most interesting 
 
 **Success (D-17):** curated selection reaches random's mAP with half the labels or fewer.
 
+**First point (M4):** random's curve (one seed) rises from stock yolo26s's 0.599 to 0.661 at 1,000 frames, but gains only 0.015 above 250 frames, so the budgets that can decide D-17 lie below about 250 ([m4_first_curve](../../research/m4_first_curve/README.md)).
+
 | Fixed part | Value |
 |---|---|
 | Class | person |
-| Student | YOLO; one size fixed for the whole experiment (fallback RF-DETR) |
+| Student | yolo26s from the stock checkpoint, `imgsz` 1280, batch 8, 50 epochs, for every method, seed and budget (D-40; fallback RF-DETR) |
 | Pool | MEVA school site, cameras G299 and G330, 2018-03-07, one continuous hour ([../heavy_data.md](../heavy_data.md)) |
 | Test set | Same cameras, **other days**: 300 random frames from five days (D-32), SAM3's labels checked by a person, crowds as ignore regions (D-34); run `20261127-094340-human.annotate-64f9`. Selection never touches it (D-13) |
-| Val set | A few whole recordings held out from the pool day, SAM3 labels unchecked; only picks each student's checkpoint (D-31) |
+| Val set | The pool day's 11:30–11:40, both cameras (308 candidates), SAM3 labels unchecked; only picks each student's checkpoint (D-31) |
 
 ## 6. Known risks
 

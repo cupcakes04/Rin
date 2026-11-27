@@ -2,7 +2,7 @@
 
 **Question.** Of the pool's frames sampled at 2 fps, how many survive the cheap filters, and then de-duplication on whole-frame DINOv3 vectors? Is 1 fps enough? The experiment needs at least 1,000 candidates (the largest label budget, usage C1).
 
-**Setup** (M2, 2026-11-25). The run ids below were in `workspace/store_m2/`, deleted in M4 (2026-11-27) after M4 rebuilt the same chain in `workspace/store` and got the same 4,453 candidates, frame for frame ([M4 step 1](../../notes/milestones/M4.md#measurements)). MEVA pool: cameras G299 and G330, one hour, an indoor school gym ([heavy_data.md](../../notes/heavy_data.md)). DINOv3 ViT-L/16, CLS vector, 896×512 input, float32 weights under float16 autocast.
+**Setup** (M2, 2026-11-25). The run ids below were in `workspace/store_m2/`, deleted in M4 (2026-11-27) after M4 rebuilt the same chain in `workspace/store` and got the same 4,453 candidates, frame for frame ([m4_selection](../m4_selection/README.md)). MEVA pool: cameras G299 and G330, one hour, an indoor school gym ([heavy_data.md](../../notes/heavy_data.md)). DINOv3 ViT-L/16, CLS vector, 896×512 input, float32 weights under float16 autocast.
 
 | Step | 2 fps run | 1 fps run |
 |---|---|---|

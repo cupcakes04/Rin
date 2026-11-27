@@ -18,3 +18,6 @@ Raw runs, weights and frame caches stay in `workspace/` (heavy, gitignored). Onl
 | [m3_sam3_test_day](m3_sam3_test_day/README.md) | What does SAM3 find on the test footage, and what does it cost? |
 | [m3_checked_test_set](m3_checked_test_set/README.md) | What did a person change to make the test set true, and how reliable is it? |
 | [m3_pilot](m3_pilot/README.md) | How good is SAM3 against a person's own blind boxes? |
+| [m4_training_labels](m4_training_labels/README.md) | Which of SAM3's boxes should train the student? |
+| [m4_selection](m4_selection/README.md) | What do the three selection methods pick from the pool? |
+| [m4_first_curve](m4_first_curve/README.md) | Does a student learn from SAM3's unchecked labels, and does it improve with more frames? |

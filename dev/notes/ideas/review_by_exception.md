@@ -38,7 +38,7 @@ flowchart LR
     P -->|"teacher unreliable"| H["Person in the loop,<br/>ignore regions,<br/>or out of scope"]
 ```
 
-What the boundary is in numbers is open; M5 gives the first point on it: whether a student trained on SAM3's unchecked labels at this gym's measured reliability (precision 0.93 at its gate, [M4](../milestones/M4.md#measurements)) learns well enough.
+What the boundary is in numbers is open; M5 gives the first point on it: whether a student trained on SAM3's unchecked labels at this gym's measured reliability (precision 0.93 at its gate, [m4_training_labels](../../research/m4_training_labels/README.md)) learns well enough.
 
 ## First measurement (M3, 300 test frames)
 

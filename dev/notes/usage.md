@@ -223,7 +223,7 @@ test_exp = export.coco(m, checked, classes=["person"], crowd={"crowd": "person"}
 ```python
 methods = ["random", "kcenter", "kmeans_stratified"]
 seeds   = [0, 1, 2]
-budgets = [100, 250, 500, 1000]                            # placeholder: limited by SAM3 cost, measured in M3
+budgets = [100, 250, 500, 1000]                            # placeholder: M5 lowers them (M4: flat above 250)
 
 sel = {}
 for meth in methods:
