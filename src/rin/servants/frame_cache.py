@@ -27,12 +27,20 @@ def cached_frames(m: Master, frames: Run) -> list[tuple[str, int, Path]]:
     frame_idx. Frames not cached yet are decoded first: one pass per media, at full size."""
     if "frame_sets" not in frames.tables:
         raise TypeError(f"Caching frames needs a frame set; {frames.id} wrote {frames.tables}")
-    per_media = m.sql(
-        """SELECT d.media_id, d.path, list(s.frame_idx ORDER BY s.frame_idx)
-           FROM frame_sets s JOIN media d USING (media_id)
-           WHERE s.run_id = ? GROUP BY ALL ORDER BY d.media_id""",
-        [frames.id],
-    ).fetchall()
+    keys = m.sql("SELECT media_id, frame_idx FROM frame_sets WHERE run_id = ?", [frames.id]).fetchall()
+    return cache_frames(m, keys)
+
+
+def cache_frames(m: Master, keys: list[tuple[str, int]]) -> list[tuple[str, int, Path]]:
+    """`cached_frames` for a list of (media_id, frame_idx) that isn't a whole frame set."""
+    by_media: dict[str, set[int]] = {}
+    for media_id, idx in keys:
+        by_media.setdefault(media_id, set()).add(int(idx))
+    paths = dict(m.sql("SELECT media_id, path FROM media WHERE list_contains(?, media_id)", [list(by_media)]).fetchall())
+    unknown = sorted(set(by_media) - set(paths))
+    if unknown:
+        raise KeyError(f"No media {unknown[:3]} in the store")
+    per_media = [(media_id, paths[media_id], sorted(by_media[media_id])) for media_id in sorted(by_media)]
 
     out: list[tuple[str, int, Path]] = []
     for media_id, path, idx in per_media:

@@ -64,6 +64,15 @@ TABLES: dict[str, pa.Schema] = {
         ]))),
         pa.field("track_id", pa.int64()),                       # same object across frames
     ]),
+    "artifacts": pa.schema([                                    # files a run made (exports, weights)
+        pa.field("name", pa.string(), nullable=False),          # e.g. data_yaml, best
+        pa.field("path", pa.string(), nullable=False),          # relative to the run's folder
+    ]),
+    "metrics": pa.schema([                                      # numbers a run measured
+        pa.field("name", pa.string(), nullable=False),          # e.g. val/mAP50-95
+        pa.field("class", pa.string()),                         # null: over all classes
+        pa.field("value", pa.float64(), nullable=False),
+    ]),
 }
 
 EMBEDDING_KINDS = ("cls", "mean_patch", "box_pooled")
@@ -124,7 +133,7 @@ def conform(name: str, table: pa.Table) -> pa.Table:
 
 # Float columns that must hold real numbers: NaN passes every < and > comparison, so range
 # checks alone let it through.
-FINITE = {"frames": ("pts",), "frame_scores": ("value",), "instances": ("score",)}
+FINITE = {"frames": ("pts",), "frame_scores": ("value",), "instances": ("score",), "metrics": ("value",)}
 
 
 def _check_boxes(table: pa.Table) -> None:

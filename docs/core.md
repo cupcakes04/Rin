@@ -34,8 +34,14 @@ result = module.verb(m, inputs, **that_step's_own_arguments)
 | `curate.union(m, [frame_set, ...])` | Every frame of the given frame sets, once, unranked | `frame_sets` |
 | `curate.dedupe(m, frames, emb, cosine_max=..., kind="cls")` | Walks each stream's frames in time order and drops a frame whose vector is more similar than `cosine_max` to the last kept one. Refuses all-zero vectors | `frame_sets` |
 | `curate.select(m, frames, emb, method=..., n_max=..., seed=..., clusters=None, kind="cls")` | Up to `n_max` frames, ranked (`rank` 0, 1, …), so budget N is the first N (D-28). `method` is one of `curate.METHODS`: `random` (the same draw as `curate.random`), `kcenter` (farthest-point, first frame drawn by `seed`), `kmeans_stratified` (`clusters` groups per stream, one frame per cluster per round). `kcenter` and `kmeans_stratified` work per stream on Euclidean distance between raw vectors, and the streams take turns in the ranking, so every budget is even across cameras (D-38) | `frame_sets` |
+| `m.dataset(labels=[...], frames=..., top=None, gate=..., duplicate_iou=None)` | A training set as a query; writes nothing. The first `top` frames of a ranked frame set (all when `None`), and the `labels` runs' boxes on them that pass `gate`, SQL on the instances columns plus `w`, `h`, `area` (e.g. `"score >= 0.5"`). With `duplicate_iou`, of two boxes on a frame overlapping that much, the lower-scored is dropped. Refuses a frame no label run was given, or two were (it would export as empty, or with both runs' boxes) | |
+| `export.yolo(m, ds, classes=[...], val=val_ds, tags=None)` | Freezes a train and a val dataset in Ultralytics' format under the run's `files/`: `images/{train,val}/` hard links to the frame cache, `labels/{train,val}/` one `.txt` per frame (empty for a frame with nobody), `data.yaml` without a `path` key (the export can move). Refuses a box of a class not in `classes`, and a recording in both splits (D-13) | `frame_sets`, `instances` (the boxes exported), `artifacts` |
+| `yolo.train(m, export, model=..., epochs=..., imgsz=..., batch=..., seed=..., workers=8, tags=None)` | Trains a stock checkpoint file on the export, by a GPU job in its own environment; all epochs (no early stop), `best.pt` picked by the val score. Trains on a hard-linked copy, since Ultralytics writes a labels cache beside the labels. Weights, `results.csv` and `args.yaml` under `files/`. Val metrics are against SAM3's unchecked val labels: they pick the checkpoint, they don't score the student (D-31) | `metrics` (val scores, time, peak VRAM), `artifacts` |
+| `yolo.predict(m, model, frames, conf=0.001, max_det=100, imgsz=..., batch=16, classes=None, tags=None)` | The detector's boxes on a frame set, by a GPU job (the training environment). `model` is a `yolo.train` run (its `best.pt`) or a checkpoint file; `classes` keeps only those class names (e.g. `["person"]` from a stock COCO model). Confidence 0.001 and 100 boxes per frame suit COCO scoring | `instances` |
+| `export.coco(m, truth, classes=[...], crowd=None, tags=None)` | A checked run (frame set + boxes, e.g. `human.annotate`) as COCO ground truth in `files/annotations.json`: every frame, empty ones too; boxes in pixels; `crowd={"crowd": "person"}` writes a crowd box as `person` with `iscrowd = 1` (D-34) | `artifacts` |
+| `evaluate.coco(m, predictions, truth, tags=None)` | pycocotools' box evaluation of a predictions run against an `export.coco` run; a detection inside a crowd region is neither rewarded nor punished. Refuses predictions not made on every truth frame | `metrics`: `mAP50-95`, `mAP50`, `mAP75`, `mAP_small` / `_medium` / `_large`, `AR1`, `AR10`, `AR100`, AR by size, `fp_per_empty_frame` (boxes ≥ 0.5 on frames with nobody) |
 
-A `Run` has `.id`, `.step`, `.config`, `.inputs`, `.tags`, its tables as `.media()`, `.frames()`, `.frame_set()`, `.frame_scores()`, `.embeddings()`, `.instances()`, its vectors as `.vectors()` (row r belongs to the `embeddings` row whose `row` is r), and `len(run)` for a frame set.
+A `Run` has `.id`, `.step`, `.config`, `.inputs`, `.tags`, its tables as `.media()`, `.frames()`, `.frame_set()`, `.frame_scores()`, `.embeddings()`, `.instances()`, any table by name with `.table("metrics")`, its vectors as `.vectors()` (row r belongs to the `embeddings` row whose `row` is r), and `len(run)` for a frame set.
 
 ```python
 pool = core.ingest(m, "workspace/media/meva/pool", split="pool", describe=meva_name)
@@ -47,7 +53,7 @@ emb    = dinov3.embed(m, kept, model="facebook/dinov3-vitl16-pretrain-lvd1689m",
 cands  = curate.dedupe(m, kept, emb, cosine_max=0.99)
 ```
 
-Imports: `from rin import Master, core, curate, human, viewer` and `from rin.servants import dinov3, sam3`.
+Imports: `from rin import Master, core, curate, evaluate, export, human, viewer` and `from rin.servants import dinov3, sam3, yolo`.
 
 ## Rules worth knowing
 
@@ -81,7 +87,7 @@ workspace/store/
   frames/<media_id>/<frame_idx>.jpg                  # the frame cache
 ```
 
-Each table (`media`, `frames`, `frame_sets`, `frame_scores`, `embeddings`, `instances`, `runs`) is a DuckDB view over that table's files in every run folder, matched by column name (a column added later reads as null in older runs). Columns: [src/rin/store/schema.py](../src/rin/store/schema.py).
+Each table (`media`, `frames`, `frame_sets`, `frame_scores`, `embeddings`, `instances`, `artifacts`, `metrics`, `runs`) is a DuckDB view over that table's files in every run folder, matched by column name (a column added later reads as null in older runs). Columns: [src/rin/store/schema.py](../src/rin/store/schema.py).
 
 **Don't delete the store to start over.** It will hold a person's checks and drawn boxes, which nothing rebuilds; back it up. Only `frames/` (the cache) is safe to delete.
 
@@ -94,11 +100,14 @@ flowchart TB
     subgraph steps["rin.core · rin.curate: steps the notebook calls"]
       ING["core/ingest.py<br/>files → media + frames"]
       SAM["core/sample.py<br/>media → frame set"]
+      EXP["export/yolo.py · coco.py<br/>dataset → YOLO files · truth → COCO"]
+      EVA["evaluate/coco.py<br/>predictions vs truth → metrics"]
       CUR["curate/scores.py · dedupe.py · center.py ·<br/>random_frames.py · union.py · select.py ·<br/>streams.py (one camera, day, split)"]
     end
     subgraph servants["rin.servants: model steps"]
-      DIN["dinov3/ · sam3/<br/>__init__.py caller · job.py job (own env)"]
+      DIN["dinov3/ · sam3/ · yolo/<br/>__init__.py caller · job.py job (own env)"]
       FC["frame_cache.py<br/>frames → JPEGs, shared"]
+      CHK["checksum.py<br/>checkpoint SHA-256, shared"]
       LAU["launch.py<br/>start a job in its env, shared"]
     end
     subgraph people["rin.viewer · rin.human: a person's eyes and hands"]
@@ -108,6 +117,7 @@ flowchart TB
     subgraph handles["handles"]
       MAS["master.py · Master<br/>the store: sql(), run(), runs()"]
       RUN["run.py · Run<br/>what every step returns"]
+      DS["dataset.py · Dataset<br/>m.dataset(): frames + gated boxes"]
     end
     subgraph store["rin.store: the disk, and nothing else"]
       LAY["layout.py<br/>where folders are"]
@@ -123,12 +133,14 @@ flowchart TB
     ING --> PRO & WRI & MAS
     SAM --> TIM & WRI & MAS
     CUR --> REA & WRI & MAS
-    DIN --> FC & LAU & WRI & MAS
+    DIN --> FC & LAU & CHK & WRI & MAS
+    EXP --> FC & WRI & MAS & DS
+    EVA --> WRI & MAS
     VW --> FC & LAU & MAS
     HU --> VW & WRI & MAS
     FC --> REA & MAS
     MAS --> VIE & LAY
-    MAS --> RUN
+    MAS --> RUN & DS
     WRI --> SCH & LAY
     VIE --> SCH & LAY
 ```
@@ -138,7 +150,7 @@ flowchart TB
 | `rin.media` | video files, timestamps | the store, runs |
 | `rin.store` | folders, Parquet, the tables' columns | video, models, steps |
 | `rin.master`, `rin.run` | how to find and query runs | how any step works |
-| `rin.core`, `rin.curate` | its own step's logic | other steps, models |
+| `rin.core`, `rin.curate`, `rin.export`, `rin.evaluate` | its own step's logic | other steps, models |
 | `rin.servants.<model>` | one model: caller and job | other servants |
 | `rin.viewer`, `rin.human` | FiftyOne as a throwaway copy; turning what a person drew into a run | models |
 | `rin.servants.frame_cache`, `rin.servants.launch` | which frames are cached; how a job is started in its environment | any model's inputs or outputs |

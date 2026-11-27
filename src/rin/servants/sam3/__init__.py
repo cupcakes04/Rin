@@ -9,7 +9,6 @@ environment, on the user's engine in vendors/sam3_engine, and imports nothing fr
 
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 
@@ -17,6 +16,7 @@ import pyarrow as pa
 
 from rin.master import Master
 from rin.run import Run
+from rin.servants.checksum import file_sha256
 from rin.servants.frame_cache import cached_frames
 from rin.servants.launch import run_job
 from rin.store import vendor_commit
@@ -78,7 +78,7 @@ def concept(
         step="sam3.concept", config=config, inputs=[frames.id],
         model="sam3", checkpoint=m.layout.relative_media_path(checkpoint),
     ) as w:
-        w.add_provenance(checkpoint_sha256=_sha256(checkpoint), sam3_engine=vendor_commit(ENGINE_DIR))
+        w.add_provenance(checkpoint_sha256=file_sha256(checkpoint), sam3_engine=vendor_commit(ENGINE_DIR))
         images = cached_frames(m, frames)
         sizes = dict(
             (media_id, (width, height))
@@ -129,10 +129,3 @@ def concept(
         (w.tmp_dir / "job.json").unlink()  # its content is now the instances table
     return m.run(w.run_id)
 
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as f:
-        while chunk := f.read(1 << 24):
-            digest.update(chunk)
-    return digest.hexdigest()

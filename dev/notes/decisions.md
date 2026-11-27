@@ -95,6 +95,8 @@ flowchart LR
 
 **D-39 · Training labels are SAM3's boxes scoring 0.5 or more, unchecked, with no size gate; boxes on the same spot all hour are kept; of two near-duplicate boxes (IoU ≥ 0.7) on one frame, the higher-scored one is kept.** *Why:* 0.5 is the knee on the checked test set (wrong boxes halve from 0.45, no checked person lost; above it checked people drop out fast), and the blind pilot's F1 is flat from 0.4 to 0.7. A size gate would drop the 10% of checked people who are 20–40 px tall. In the pool's busy hour the same-spot boxes are people seated all hour, not bags (the user looked, 2026-11-27); dropping them would teach the student that a seated person is background ([M4 measurements](milestones/M4.md#measurements)). *Cost:* the teacher's errors stay in training: about 7% wrong boxes at 0.5 (test days, outside crowds), and boxes over two people, which no rule here catches.
 
+**D-40 · The proof's student is yolo26s from the stock COCO checkpoint, trained at `imgsz` 1280, batch 8, 50 epochs, no early stop**, the same for every method, seed and budget (D-17's "one size, fixed"). *Why:* 1280 scored 0.69 against 640's 0.54 on val after 10 epochs (640 shrinks a 40 px person to 13 px), and 10 epochs still climb ([M4 measurements](milestones/M4.md#measurements)). Small, because the student is the edge model; one size, because the question is which frames, not which model, and each extra size repeats all 36 trainings. The user's yes, 2026-11-27. *Cost:* the verdict holds for this student; whether it holds for a larger YOLO or RF-DETR is parked until the verdict exists.
+
 ## Proposed
 
 None right now.

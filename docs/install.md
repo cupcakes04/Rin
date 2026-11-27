@@ -1,6 +1,6 @@
 # Installing Rin
 
-Rin runs on Linux (developed on WSL2 with one 16 GB GPU). This page sets up the **core environment** (the store, ingest, sampling, curation) and, in sections 6 to 8, the DINOv3 and SAM3 environments and the viewer (FiftyOne). Each model gets its own separate environment, added to this page when its servant is built.
+Rin runs on Linux (developed on WSL2 with one 16 GB GPU). This page sets up the **core environment** (the store, ingest, sampling, curation) and, in sections 6 to 9, the DINOv3 and SAM3 environments, the viewer (FiftyOne) and the YOLO environment. Each model gets its own separate environment, added to this page when its servant is built.
 
 ## What you need first
 
@@ -103,3 +103,15 @@ bash dev/scripts/fiftyone_mongod.sh
 Check: the script's last line is `db version v8.0.17`. If it says a library is missing, install that library with `apt` and run the script again. If FiftyOne later says ``Could not find `mongod` ``, run the script again: a fresh `uv sync` that reinstalls `fiftyone-db` removes the binary.
 
 Look and draw in the browser: `uv run --project src/rin/viewer fiftyone app launch <name>`, then open `http://localhost:5151`.
+
+## 9. The YOLO environment (GPU)
+
+`yolo.train` runs Ultralytics in a separate environment, defined in `src/rin/servants/yolo/pyproject.toml` (Ultralytics, PyTorch for CUDA 13.0). The first `train` call creates it; to create it ahead of time:
+
+```bash
+uv sync --locked --project src/rin/servants/yolo
+```
+
+Check: `src/rin/servants/yolo/.venv/bin/python -c "import torch, ultralytics; print(torch.cuda.is_available())"` prints `True`.
+
+Stock checkpoints live in `workspace/checkpoints/yolo/` (e.g. `yolo26s.pt`); pass the file to `train`. The job runs in that folder, where Ultralytics' mixed-precision check looks for `yolo26n.pt`: keep `yolo26n.pt` there, or Ultralytics downloads it into the folder on the first run.

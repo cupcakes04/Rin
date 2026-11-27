@@ -207,7 +207,7 @@ checked = human.annotate(m, test_frames, view="check", field="checked", who="nic
 ### B4 · Freeze the test set
 
 ```python
-test_exp = export.coco(m, checked, classes=["person"], crowd="crowd")   # crowd boxes -> iscrowd=1 (D-34)
+test_exp = export.coco(m, checked, classes=["person"], crowd={"crowd": "person"})   # crowd -> iscrowd=1 (D-34)
 ```
 
 - **What:** the export writes the checked run as COCO ground truth (D-12), as a run of its own, which freezes exactly which frames and boxes the test set holds. COCO, not YOLO, because scoring must ignore crowd regions and Ultralytics' validation can't (D-34; the details are parked debt for M5).
@@ -256,10 +256,12 @@ for (meth, s), picks in sel.items():
     for n in budgets:
         tags = {"method": meth, "seed": s, "n": n}
         ds   = m.dataset(labels=[pool_labels], frames=picks, top=n,
-                         gate="score >= 0.5")   # D-39: no size gate; near-duplicates keep the higher score
-        exp     = export.yolo(m, ds, classes=["person"], val=val_labels, tags=tags)   # val: D-31, chosen in M4
-        student = yolo.train(m, exp, model="yolo26s", epochs=100, imgsz=1280, seed=s, tags=tags)  # placeholders: M4
-        coco.evaluate(m, student, test_exp, tags=tags)       # COCO scoring, crowd regions ignored (D-34)
+                         gate="score >= 0.5", duplicate_iou=0.7)   # D-39: no size gate; near-duplicates keep the higher score
+        exp     = export.yolo(m, ds, classes=["person"], val=val_ds, tags=tags)   # val_ds: D-31's clips, same gate
+        student = yolo.train(m, exp, model="workspace/checkpoints/yolo/yolo26s.pt",
+                             epochs=50, imgsz=1280, batch=8, seed=s, tags=tags)      # D-40
+        preds   = yolo.predict(m, student, checked, imgsz=1280, tags=tags)          # on the test frames
+        evaluate.coco(m, preds, test_exp, tags=tags)         # COCO scoring, crowd regions ignored (D-34)
 ```
 
 - **What:** 3 methods × 3 seeds × 4 budgets = 36 exports, trainings and evaluations, each a run with tags.
@@ -274,7 +276,7 @@ res = m.sql("""
     SELECT r.tags->>'method' AS method, (r.tags->>'n')::INT AS n,
            avg(x.value) AS map, stddev(x.value) AS spread
     FROM metrics x JOIN runs r USING (run_id)
-    WHERE r.step = 'coco.evaluate' AND x.name = 'mAP50-95'
+    WHERE r.step = 'evaluate.coco' AND x.name = 'mAP50-95'
     GROUP BY method, n ORDER BY method, n
 """)
 res.plot_curve(x="n", y="map", group="method", band="spread")

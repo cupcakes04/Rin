@@ -8,6 +8,7 @@ from typing import Any
 
 import duckdb
 
+from rin.dataset import Dataset
 from rin.run import Run
 from rin.store import Layout, RunWriter
 from rin.store.views import refresh
@@ -50,6 +51,23 @@ class Master:
 
     def runs(self) -> duckdb.DuckDBPyRelation:
         return self.sql("SELECT run_id, step, config, tags, inputs, who, finished_at FROM runs ORDER BY run_id")
+
+    def dataset(
+        self,
+        *,
+        labels: list[Run],
+        frames: Run,
+        top: int | None = None,
+        gate: str,
+        duplicate_iou: float | None = None,
+    ) -> Dataset:
+        """A training set, as a query: the first `top` frames of a ranked frame set (all of them
+        when `top` is None), and the boxes of the `labels` runs on them that pass `gate`, an SQL
+        condition on the instances columns plus `w`, `h`, `area` (e.g. "score >= 0.5"). With
+        `duplicate_iou`, of two boxes on one frame overlapping that much, the lower-scored one
+        is dropped. Every frame must have been labelled by exactly one of the `labels` runs.
+        Writes nothing; `export.yolo` freezes it into a run."""
+        return Dataset(self, labels=labels, frames=frames, top=top, gate=gate, duplicate_iou=duplicate_iou)
 
     def writer(self, **kwargs: Any) -> RunWriter:
         """A RunWriter on this store. Steps use it; notebooks don't need it."""

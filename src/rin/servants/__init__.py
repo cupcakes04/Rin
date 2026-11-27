@@ -9,4 +9,8 @@
 Shared by every servant, beside the model folders:
 - `frame_cache.py`: decodes the frames a job needs into JPEGs once (D-29), so no job ever
   decodes video. Plumbing only: it says nothing about any model's inputs or outputs (D-01).
+- `launch.py`: starts a job in its own environment and streams its output.
+- `checksum.py`: the SHA-256 of a checkpoint file, for the run's provenance.
+
+Import a servant by name: `from rin.servants import dinov3, sam3, yolo`.
 """
