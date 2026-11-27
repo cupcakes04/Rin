@@ -24,15 +24,15 @@ result = module.verb(m, inputs, **that_step's_own_arguments)
 | `core.sample(m, ingest_run, fps=...)` | The frame on screen at 0, 1/fps, 2/fps, ... seconds of each media, by real timestamps | `frame_sets` |
 | `curate.score_frames(m, frames, names)` | Measures each frame of a frame set on a 320-wide copy (CPU). Names and meanings: `curate.SCORES` (`motion`, `blur`, `dark`, `bright`) | `frame_scores` |
 | `curate.keep(m, scores, where=...)` | The frames whose stored scores pass an SQL condition, e.g. `"motion >= 0.002"`. Nothing is decoded; trying another threshold is another cheap run | `frame_sets` |
-| `dinov3.embed(m, frames, model=..., size=(896, 512), what=("cls",), batch_size=32)` | One DINOv3 vector per frame and kind (`cls`, `mean_patch`), computed by a GPU job in its own environment. `size` is (width, height), multiples of 16 | `embeddings` + `embeddings.npy` |
+| `dinov3.embed(m, frames, model=..., revision=..., size=(896, 512), what=("cls",), batch_size=32)` | One DINOv3 vector per frame and kind (`cls`, `mean_patch`), computed by a GPU job in its own environment. `revision` is the model's 40-character commit, already in the Hugging Face cache (the folder name under `snapshots/`); the job loads offline at that commit, so a run never quietly uses a newer model. `size` is (width, height), multiples of 16 | `embeddings` + `embeddings.npy` |
 | `sam3.concept(m, frames, prompts={"person": "person"}, checkpoint=..., score_floor=0.1, masks=True, box="detector", images_per_session=8)` | Every instance of each class on each frame, from a text prompt (one per class), by a GPU job in SAM3's environment. Boxes in [0, 1], masks as COCO RLE counts at the media's full size. `box="detector"` stores SAM3's own box (D-36); `box="mask"` the box around the mask, which spans both pieces when a mask is split. Records the checkpoint's SHA-256 and `sam3_engine`'s commit | `instances` |
 | `viewer.show(m, frames, name=..., labels=[...], label_scores=None, draw=None, start_from=None, start_above=0.5, classes=("person",), replace=False)` | Builds a throwaway FiftyOne dataset (D-16) from a frame set, in `rank` order: each label run's boxes as a read-only field (only a score band with `label_scores=(low, high)`), and, with `draw`, a field to draw into: empty, or holding `start_from`'s boxes above `start_above` (D-33). `marks={"name": [box, ...]}` adds read-only layers of boxes that aren't a run (e.g. `human.suspects`), shown as `marks_<name>`; `tags={"flagged": [frame, ...]}` tags frames to filter on, without a layer. Open it with `uv run --project src/rin/viewer fiftyone app launch <name>`. Writes no run; the dataset remembers what it was built from | |
 | `human.annotate(m, frames, view=..., field=..., who=..., done_tag="done")` | Files the frames of a viewer dataset tagged `done` (every object on them has a box) with the boxes on them; the run's inputs name the frame set and every run the view showed or started from. Boxes on untagged frames are refused, unless the view started from a run: then untagged frames are left out, so a check can be filed part-way. A `crowd` box removes every other box at least half inside it (D-34). A box dragged past the image edge is clipped to it. No score; the person in `who` | `frame_sets` (the finished frames), `instances` |
 | `human.suspects(m, frames, boxes, masks=None)` | Boxes worth a second look while checking (D-33): the same spot on at least half of a camera's frames that day (bags, coats, chairs, people sitting still), near-duplicates on one frame, and, with `masks` (a SAM3 run), a box around a split mask, with SAM3's detector box as `suggested` when that run stored it. Returns a list of flags; writes no run | |
-| `curate.center(m, emb)` | A new embedding run: each vector minus its camera's mean vector (same kind), so the shared background drops out. Refuses a camera with a single frame (its centred vector would be zero) | `embeddings` + `embeddings.npy` |
+| `curate.center(m, emb)` | A new embedding run: each vector minus its stream's mean vector (same kind), so the shared background drops out. Refuses a stream with a single frame (its centred vector would be zero) | `embeddings` + `embeddings.npy` |
 | `curate.random(m, frames, n=..., seed=...)` | `n` frames drawn at random, `rank` = draw order (the first k are a random k). Same seed, same frames in any store with the same files | `frame_sets` |
 | `curate.union(m, [frame_set, ...])` | Every frame of the given frame sets, once, unranked | `frame_sets` |
-| `curate.dedupe(m, frames, emb, cosine_max=..., kind="cls")` | Walks each camera's frames in time order and drops a frame whose vector is more similar than `cosine_max` to the last kept one. Refuses all-zero vectors | `frame_sets` |
+| `curate.dedupe(m, frames, emb, cosine_max=..., kind="cls")` | Walks each stream's frames in time order and drops a frame whose vector is more similar than `cosine_max` to the last kept one. Refuses all-zero vectors | `frame_sets` |
 
 A `Run` has `.id`, `.step`, `.config`, `.inputs`, `.tags`, its tables as `.media()`, `.frames()`, `.frame_set()`, `.frame_scores()`, `.embeddings()`, `.instances()`, its vectors as `.vectors()` (row r belongs to the `embeddings` row whose `row` is r), and `len(run)` for a frame set.
 
@@ -41,7 +41,8 @@ pool = core.ingest(m, "workspace/media/meva/pool", split="pool", describe=meva_n
 frames = core.sample(m, pool, fps=2)
 scores = curate.score_frames(m, frames, ["motion", "blur", "dark", "bright"])
 kept   = curate.keep(m, scores, where="motion >= 0.002")
-emb    = dinov3.embed(m, kept, model="facebook/dinov3-vitl16-pretrain-lvd1689m")   # GPU
+emb    = dinov3.embed(m, kept, model="facebook/dinov3-vitl16-pretrain-lvd1689m",
+                      revision="ea8dc2863c51be0a264bab82070e3e8836b02d51")   # GPU
 cands  = curate.dedupe(m, kept, emb, cosine_max=0.99)
 ```
 
@@ -49,6 +50,7 @@ Imports: `from rin import Master, core, curate, human, viewer` and `from rin.ser
 
 ## Rules worth knowing
 
+- **A stream is one camera on one day in one split** (site included): `curate.center` and `curate.dedupe` never mix a camera's val clips into its pool, or one day into the next. Media without a camera are each their own stream; `dedupe` also needs the start time to walk clips in order, and otherwise walks each media alone.
 - **`frame_idx` is the i-th frame the decoder returns.** Every table joins on `(media_id, frame_idx)`, never on time.
 - **`pts` is seconds since frame 0**, read from every decoded frame. Some AVI files (MEVA's included) attach timestamps in storage order; Rin sorts them into display order. Two frames with the same timestamp are refused.
 - **Time to frame:** time t is the latest frame that started at or before t, with 0.5 ms tolerance for rounding in the container.
@@ -91,7 +93,7 @@ flowchart TB
     subgraph steps["rin.core · rin.curate: steps the notebook calls"]
       ING["core/ingest.py<br/>files → media + frames"]
       SAM["core/sample.py<br/>media → frame set"]
-      CUR["curate/scores.py · dedupe.py · center.py ·<br/>random_frames.py · union.py"]
+      CUR["curate/scores.py · dedupe.py · center.py ·<br/>random_frames.py · union.py ·<br/>streams.py (one camera, day, split)"]
     end
     subgraph servants["rin.servants: model steps"]
       DIN["dinov3/ · sam3/<br/>__init__.py caller · job.py job (own env)"]

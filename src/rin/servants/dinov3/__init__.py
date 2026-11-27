@@ -30,6 +30,7 @@ def embed(
     frames: Run,
     *,
     model: str,
+    revision: str,
     size: tuple[int, int] = (896, 512),
     what: list[str] | tuple[str, ...] = ("cls",),
     batch_size: int = 32,
@@ -37,6 +38,9 @@ def embed(
     """Embed every frame of a frame set with DINOv3 (GPU).
 
     model:      a Hugging Face DINOv3 id, e.g. "facebook/dinov3-vitl16-pretrain-lvd1689m".
+    revision:   the model's commit (40 hex characters), already in the Hugging Face cache: the
+                job loads offline, so a run never quietly uses a newer model. The cached commit
+                is the folder name under ~/.cache/huggingface/hub/models--<org>--<name>/snapshots/.
     size:       (width, height) the frames are resized to; multiples of 16 (the patch size).
                 The default keeps 16:9, so a person 100 px tall at 1080p spans about 3 patches.
     what:       vector kinds, from KINDS. One row per frame and kind in embeddings.npy.
@@ -44,6 +48,8 @@ def embed(
     """
     if not isinstance(model, str) or not model:
         raise ValueError(f"model must be a Hugging Face model id, got {model!r}")
+    if not isinstance(revision, str) or len(revision) != 40 or any(c not in "0123456789abcdef" for c in revision):
+        raise ValueError(f"revision must be a 40-character commit hash, got {revision!r}")
     if len(size) != 2 or any(not isinstance(s, int) or isinstance(s, bool) or s < 16 or s % 16 for s in size):
         raise ValueError(f"size must be (width, height), each a multiple of 16, got {size!r}")
     what = list(what)
@@ -55,7 +61,7 @@ def embed(
     config = {"size": list(size), "what": what, "batch_size": batch_size}
     with m.writer(step="dinov3.embed", config=config, inputs=[frames.id], model=model) as w:
         images = cached_frames(m, frames)  # inside the run: decoding is part of what the step costs
-        spec = {"model": model, **config, "images": [str(p) for _, _, p in images]}
+        spec = {"model": model, "revision": revision, **config, "images": [str(p) for _, _, p in images]}
         spec_file = w.tmp_dir / "spec.json"
         spec_file.write_text(json.dumps(spec))
         run_job(JOB_DIR, spec_file)
@@ -70,7 +76,9 @@ def embed(
         if not np.isfinite(vectors).all():
             raise RuntimeError("The job wrote non-finite values (NaN or inf) into embeddings.npy")
         del vectors
-        w.add_provenance(checkpoint=report["model_revision"], **report["versions"])
+        if report["model_revision"] != revision:
+            raise RuntimeError(f"The job loaded {model} at {report['model_revision']}, not {revision}")
+        w.add_provenance(checkpoint=revision, **report["versions"])
         w.write("embeddings", pa.table({
             "row": pa.array(range(n * len(what)), pa.int64()),
             "media_id": [media_id for media_id, _, _ in images] * len(what),

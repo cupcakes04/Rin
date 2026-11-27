@@ -13,7 +13,7 @@ flowchart LR
       B1[sample test day] --> B2[SAM3] --> B3[person checks] --> B4[test export]
     end
     subgraph C["C · Experiment"]
-      C1[select ×3 methods ×3 seeds] --> C2[SAM3 once on the union] --> C3[train + evaluate per budget] --> C4[results]
+      C1[select ×3 methods ×3 seeds] --> C2[SAM3 once on every candidate] --> C3[train + evaluate per budget] --> C4[results]
     end
     subgraph D["D · Round 2 (sketch)"]
       D1[student predicts] --> D2[mine] --> D3[label + retrain]
@@ -128,6 +128,7 @@ len(kept)                                                                       
 emb = dinov3.embed(
     m, kept,
     model="facebook/dinov3-vitl16-pretrain-lvd1689m",
+    revision="ea8dc2863c51be0a264bab82070e3e8836b02d51",    # the cached commit; loaded offline
     size=(896, 512),              # (width, height), multiples of 16; keeps 16:9 (M2)
     what=["cls"],                 # D-14: no patch grids by default
     batch_size=32,
@@ -230,22 +231,21 @@ for meth in methods:
         sel[(meth, s)] = curate.select(m, cands, emb, method=meth, n_max=max(budgets), seed=s)
 ```
 
-- **What:** each call writes a **ranked** list of up to 1000 frames. Budget 250 means the first 250 of that list (D-28).
+- **What:** each call writes a **ranked** list of up to 1000 frames. Budget 250 means the first 250 of that list (D-28). `kcenter` and `kmeans_stratified` rank each camera on its own, by Euclidean distance, and take the cameras in turns, so every budget is half from each camera (D-38).
 - **Why:** ranked lists make the budgets nested: the 250-frame set contains the 100-frame set. That makes the mAP curve smoother and means SAM3 labels far fewer frames in total.
-- **Without it:** each budget would be a separate selection, and SAM3 would label up to 36 separate sets.
+- **Without it:** each budget would be a separate selection, and the curve would jump between unrelated sets of frames.
 - **Worth adding:** `random` over `frames` (before filters) as a fourth line. It tells us how much the cheap filters alone buy, separately from the embedding methods.
 
-### C2 · Label the union once
+### C2 · Label every candidate once
 
 ```python
-to_label    = curate.union(m, list(sel.values()))
-pool_labels = sam3.concept(m, to_label, prompts={"person": "person"},
+pool_labels = sam3.concept(m, cands, prompts={"person": "person"},
                            checkpoint="workspace/checkpoints/sam3/sam3.pt", score_floor=0.1, masks=True)
 ```
 
-- **What:** one SAM3 job over every frame any selection picked.
-- **Why:** a frame picked by three methods is labelled once; each dataset later takes its own subset by query.
-- **Without it:** SAM3 time, the most expensive step, would be paid several times per frame.
+- **What:** one SAM3 job over every candidate frame, picked or not (D-37); val's candidates get the same (D-31).
+- **Why:** each dataset later takes its own subset by query, so a frame picked by three methods is labelled once, a new selection method needs no new SAM3 run, and round 2 (Part D) finds SAM3's labels already there on the frames nobody picked.
+- **Without it:** SAM3, the most expensive step, would run again each time the selections change.
 - **Not checked by a person:** training labels stay pseudo-labels; that is the point of a teacher. Spot checks are possible with the same `viewer.show`.
 
 ### C3 · Train and evaluate every point on the curve
@@ -255,7 +255,7 @@ for (meth, s), picks in sel.items():
     for n in budgets:
         tags = {"method": meth, "seed": s, "n": n}
         ds   = m.dataset(labels=[pool_labels], frames=picks, top=n,
-                         gate="score >= 0.4 AND area BETWEEN 0.0001 AND 0.5")   # placeholders: M4
+                         gate="score >= 0.4 AND area BETWEEN 0.0001 AND 0.5")   # placeholders: M4 step 2; area = w * h, derived
         exp     = export.yolo(m, ds, classes=["person"], val=val_labels, tags=tags)   # val: D-31, chosen in M4
         student = yolo.train(m, exp, model="yolo26s", epochs=100, imgsz=1280, seed=s, tags=tags)  # placeholders: M4
         coco.evaluate(m, student, test_exp, tags=tags)       # COCO scoring, crowd regions ignored (D-34)
@@ -289,15 +289,15 @@ res.plot_curve(x="n", y="map", group="method", band="spread")
 
 ```python
 best       = m.best_run(step="yolo.train", where="tags->>'method' = 'kcenter' AND tags->>'n' = '500'")
-unlabelled = curate.minus(m, cands, to_label)
-preds      = yolo.predict(m, best, unlabelled, conf_floor=0.05)
+picked     = m.dataset(labels=[pool_labels], frames=sel[("kcenter", 0)], top=500, ...).frames
+unpicked   = curate.minus(m, cands, picked)
+preds      = yolo.predict(m, best, unpicked, conf_floor=0.05)
 hard       = curate.mine(m, preds, method="uncertain", band=(0.3, 0.6), n_max=250)        # placeholders: M6
-round2     = sam3.concept(m, hard, prompts={"person": "person"},
-                          checkpoint="workspace/checkpoints/sam3/sam3.pt", score_floor=0.1, masks=True)
-ds2        = m.dataset(labels=[pool_labels, round2], frames=curate.union(m, [sel[("kcenter", 0)], hard]), ...)
+# also possible: frames where preds and pool_labels disagree (SAM3 already labelled them, D-37)
+ds2        = m.dataset(labels=[pool_labels], frames=curate.union(m, [picked, hard]), ...)
 ```
 
-- **What:** the student predicts on frames nobody labelled; frames where it is unsure get labelled next, and it retrains.
+- **What:** the student predicts on frames its training set didn't hold; frames where it is unsure join the training set, with the SAM3 labels already stored for them (D-37), and it retrains.
 - **Why:** this closes the loop: the student itself says where it is weak.
 - **Without it:** selection is one-off coverage and never learns from the student's mistakes.
 

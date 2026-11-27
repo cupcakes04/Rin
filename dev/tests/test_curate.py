@@ -19,6 +19,7 @@ from rin.servants.frame_cache import cached_frames
 from rin.servants import dinov3
 
 DINO_MODULE = sys.modules["rin.servants.dinov3"]
+REV = "0123456789abcdef0123456789abcdef01234567"
 
 
 def _scores(m: Master, run: Run) -> dict[tuple[str, int, str], float]:
@@ -110,7 +111,7 @@ def _fake_job(group: int) -> object:
                 rows.append(v)
         np.save(spec_file.parent / "embeddings.npy", np.stack(rows))
         (spec_file.parent / "job.json").write_text(json.dumps(
-            {"model_revision": "abc123", "versions": {"torch": "fake", "transformers": "fake"}}
+            {"model_revision": spec["revision"], "versions": {"torch": "fake", "transformers": "fake"}}
         ))
 
     return run
@@ -118,7 +119,7 @@ def _fake_job(group: int) -> object:
 
 def test_embed_files_the_jobs_vectors_as_a_run(m: Master, every_frame: Run, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(DINO_MODULE, "run_job", _fake_job(group=4))
-    emb = dinov3.embed(m, every_frame, model="facebook/dinov3-test", what=["cls", "mean_patch"])
+    emb = dinov3.embed(m, every_frame, model="facebook/dinov3-test", revision=REV, what=["cls", "mean_patch"])
 
     n = len(every_frame)
     assert emb.vectors().shape == (2 * n, 32)
@@ -127,17 +128,22 @@ def test_embed_files_the_jobs_vectors_as_a_run(m: Master, every_frame: Run, monk
     assert list(index["kind"]) == ["cls"] * n + ["mean_patch"] * n
     files = sorted(p.name for p in m.layout.run_dir(emb.id).iterdir() if p.name != "src.diff")
     assert files == ["embeddings.npy", "embeddings.parquet", "run.json"]
-    assert emb.info["checkpoint"] == "abc123" and emb.info["code"]["transformers"] == "fake"
+    assert emb.info["checkpoint"] == REV and emb.info["code"]["transformers"] == "fake"
     assert emb.config == {"size": [896, 512], "what": ["cls", "mean_patch"], "batch_size": 32}
 
 
 @pytest.mark.parametrize(
     ("kwargs", "error"),
-    [({"size": (900, 512)}, "multiple of 16"), ({"what": ["patches"]}, "what must be"), ({"batch_size": 0}, "batch_size")],
+    [
+        ({"size": (900, 512)}, "multiple of 16"),
+        ({"what": ["patches"]}, "what must be"),
+        ({"batch_size": 0}, "batch_size"),
+        ({"revision": "main"}, "40-character commit"),
+    ],
 )
 def test_embed_checks_arguments_before_any_work(m: Master, every_frame: Run, kwargs: dict, error: str) -> None:
     with pytest.raises(ValueError, match=error):
-        dinov3.embed(m, every_frame, model="facebook/dinov3-test", **kwargs)
+        dinov3.embed(m, every_frame, **{"model": "facebook/dinov3-test", "revision": REV, **kwargs})
     assert not m.layout.frames.exists()
 
 
@@ -148,14 +154,83 @@ def test_a_failed_job_leaves_no_run(m: Master, every_frame: Run, monkeypatch: py
     monkeypatch.setattr(DINO_MODULE, "run_job", crash)
     before = {r for (r,) in m.sql("SELECT run_id FROM runs").fetchall()}
     with pytest.raises(RuntimeError, match="job failed"):
-        dinov3.embed(m, every_frame, model="facebook/dinov3-test")
+        dinov3.embed(m, every_frame, model="facebook/dinov3-test", revision=REV)
     assert {r for (r,) in m.sql("SELECT run_id FROM runs").fetchall()} == before
     assert not any(m.layout.tmp.iterdir())
 
 
+def test_a_job_that_loaded_another_revision_is_refused(
+    m: Master, every_frame: Run, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = _fake_job(group=4)
+
+    def other_revision(job_dir: Path, spec_file: Path) -> None:
+        fake(job_dir, spec_file)
+        report = spec_file.parent / "job.json"
+        report.write_text(report.read_text().replace(REV, "f" * 40))
+
+    monkeypatch.setattr(DINO_MODULE, "run_job", other_revision)
+    with pytest.raises(RuntimeError, match="not " + REV):
+        dinov3.embed(m, every_frame, model="facebook/dinov3-test", revision=REV)
+    assert not any(m.layout.tmp.iterdir())
+
+
+def _one_camera_twice(m: Master, workspace: Path, *, second_split: str, second_day: int) -> tuple[Run, Run]:
+    """Two clips of camera X: `a` (16 frames, ingested as pool, 2018-03-07 10:00) and `b`
+    (12 frames, 10:05 on 2018-03-<second_day>, in `second_split`). Both sampled at 10 fps."""
+    from conftest import CFR_STARTS_MS, make_clip
+
+    folder = workspace / "media" / "camera_x"
+    folder.mkdir()
+    a = make_clip(folder / "a.mkv", CFR_STARTS_MS, rate=10)
+    b = make_clip(folder / "b.mkv", CFR_STARTS_MS[:12], rate=10)
+    starts = {"a": datetime(2018, 3, 7, 10, 0), "b": datetime(2018, 3, second_day, 10, 5)}
+
+    def describe(path: Path) -> dict:
+        return {"site": "school", "camera": "X", "started_at": starts[path.stem]}
+
+    ingest_a = core.ingest(m, a, split="pool", describe=describe)
+    ingest_b = core.ingest(m, b, split=second_split, describe=describe)
+    return core.sample(m, ingest_a, fps=10), core.sample(m, ingest_b, fps=10)
+
+
+@pytest.mark.parametrize(
+    ("second_split", "second_day", "b_kept"),
+    [("pool", 7, []), ("val", 7, [0]), ("pool", 8, [0])],
+    ids=["one stream", "another split", "another day"],
+)
+def test_dedupe_streams_never_cross_a_split_or_a_day(
+    m: Master, workspace: Path, monkeypatch: pytest.MonkeyPatch, second_split: str, second_day: int, b_kept: list
+) -> None:
+    """Every frame of both clips has the same vector, so within one stream only its first frame
+    survives; a stream restarts at a new split or day, so b keeps its first frame there."""
+    frames_a, frames_b = _one_camera_twice(m, workspace, second_split=second_split, second_day=second_day)
+    both = curate.union(m, [frames_a, frames_b])
+    monkeypatch.setattr(DINO_MODULE, "run_job", _fake_job(group=32))
+    emb = dinov3.embed(m, both, model="facebook/dinov3-test", revision=REV)
+    cands = curate.dedupe(m, both, emb, cosine_max=0.95)
+
+    df = cands.frame_set().df().merge(m.sql("SELECT media_id, path FROM media").df(), on="media_id")
+    assert sorted(df.loc[df["path"].str.endswith("a.mkv"), "frame_idx"]) == [0]
+    assert sorted(df.loc[df["path"].str.endswith("b.mkv"), "frame_idx"]) == b_kept
+
+
+def test_center_takes_each_splits_mean_apart(m: Master, workspace: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    frames_a, frames_b = _one_camera_twice(m, workspace, second_split="val", second_day=7)
+    monkeypatch.setattr(DINO_MODULE, "run_job", _fake_job(group=4))
+    emb = dinov3.embed(m, curate.union(m, [frames_a, frames_b]), model="facebook/dinov3-test", revision=REV)
+    centred = curate.center(m, emb)
+
+    index = centred.embeddings().df().merge(m.sql("SELECT media_id, split FROM media").df(), on="media_id")
+    after = centred.vectors().astype(np.float32)
+    for _, rows in index.groupby("split")["row"]:
+        np.testing.assert_allclose(after[rows.to_numpy()].mean(axis=0), 0, atol=1e-3)
+    assert centred.config == {"by": "stream"}
+
+
 def test_dedupe_drops_frames_like_the_last_kept_one(m: Master, every_frame: Run, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(DINO_MODULE, "run_job", _fake_job(group=4))
-    emb = dinov3.embed(m, every_frame, model="facebook/dinov3-test")
+    emb = dinov3.embed(m, every_frame, model="facebook/dinov3-test", revision=REV)
     cands = curate.dedupe(m, every_frame, emb, cosine_max=0.95)
 
     df = cands.frame_set().df().merge(m.sql("SELECT media_id, path FROM media").df(), on="media_id")
@@ -166,7 +241,7 @@ def test_dedupe_drops_frames_like_the_last_kept_one(m: Master, every_frame: Run,
 def test_dedupe_needs_a_vector_for_every_frame(m: Master, clips: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     pool = core.ingest(m, clips, split="pool")
     monkeypatch.setattr(DINO_MODULE, "run_job", _fake_job(group=4))
-    emb = dinov3.embed(m, core.sample(m, pool, fps=1), model="facebook/dinov3-test")
+    emb = dinov3.embed(m, core.sample(m, pool, fps=1), model="facebook/dinov3-test", revision=REV)
     with pytest.raises(ValueError, match="no 'cls' vector"):
         curate.dedupe(m, core.sample(m, pool, fps=10), emb, cosine_max=0.95)
 
@@ -196,7 +271,7 @@ def test_vectors_with_nan_are_refused(m: Master, every_frame: Run, monkeypatch: 
 
     monkeypatch.setattr(DINO_MODULE, "run_job", nan_job)
     with pytest.raises(RuntimeError, match="non-finite"):
-        dinov3.embed(m, every_frame, model="facebook/dinov3-test")
+        dinov3.embed(m, every_frame, model="facebook/dinov3-test", revision=REV)
     assert not any(m.layout.tmp.iterdir())
 
 
@@ -206,7 +281,7 @@ def test_center_removes_each_cameras_mean(m: Master, clips: Path, monkeypatch: p
 
     frames = core.sample(m, core.ingest(m, clips, split="pool", describe=camera_of), fps=10)
     monkeypatch.setattr(DINO_MODULE, "run_job", _fake_job(group=4))
-    emb = dinov3.embed(m, frames, model="facebook/dinov3-test", what=["cls", "mean_patch"])
+    emb = dinov3.embed(m, frames, model="facebook/dinov3-test", revision=REV, what=["cls", "mean_patch"])
     centred = curate.center(m, emb)
 
     index = centred.embeddings().df().merge(m.sql("SELECT media_id, camera FROM media").df(), on="media_id")
@@ -226,8 +301,8 @@ def test_center_refuses_a_camera_with_one_frame(m: Master, clips: Path, monkeypa
 
     frames = core.sample(m, core.ingest(m, clips, split="pool", describe=camera_of), fps=10)
     monkeypatch.setattr(DINO_MODULE, "run_job", _fake_job(group=4))
-    emb = dinov3.embed(m, frames, model="facebook/dinov3-test")
-    with pytest.raises(ValueError, match="camera alone has a single 'cls' vector"):
+    emb = dinov3.embed(m, frames, model="facebook/dinov3-test", revision=REV)
+    with pytest.raises(ValueError, match=r"camera alone \(no site, pool, no day\) has a single 'cls' vector"):
         curate.center(m, emb)
     assert not any(m.layout.tmp.iterdir())
 
@@ -243,7 +318,7 @@ def test_dedupe_refuses_zero_vectors(m: Master, every_frame: Run, monkeypatch: p
         np.save(spec_file.parent / "embeddings.npy", vectors)
 
     monkeypatch.setattr(DINO_MODULE, "run_job", zero_job)
-    emb = dinov3.embed(m, every_frame, model="facebook/dinov3-test")
+    emb = dinov3.embed(m, every_frame, model="facebook/dinov3-test", revision=REV)
     with pytest.raises(ValueError, match="all-zero"):
         curate.dedupe(m, every_frame, emb, cosine_max=0.9)
 

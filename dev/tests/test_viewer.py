@@ -55,7 +55,10 @@ def test_show_sends_frames_in_rank_order_with_each_runs_boxes(
     assert Path(first["path"]).is_file()  # the cached JPEG
 
 
-@pytest.mark.parametrize(("kwargs", "error"), [({"name": "has space"}, "name"), ({"draw": "run_x"}, "draw"), ({"classes": []}, "classes")])
+@pytest.mark.parametrize(("kwargs", "error"), [
+    ({"name": "has space"}, "name"), ({"draw": "run_x"}, "draw"), ({"draw": "hints_x"}, "draw"),
+    ({"draw": "marks_x"}, "draw"), ({"classes": []}, "classes"),
+])
 def test_show_refuses_bad_arguments(m: Master, frames: Run, kwargs: dict, error: str) -> None:
     args = {"name": "pilot", "draw": "drawn", **kwargs}
     with pytest.raises(ValueError, match=error):

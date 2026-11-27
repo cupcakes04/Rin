@@ -7,7 +7,8 @@ flowchart TB
     W["workspace/ (gitignored)"] --> MED["media/"]
     W --> CK["checkpoints/"]
     W -.-> ST["store/ (from M1: runs, judgments, features)"]
-    MED --> MEVA["meva/pool · meva/test"]
+    W --> BK["backups/ (human runs, dev/scripts/backup_human_runs.sh)"]
+    MED --> MEVA["meva/pool · meva/val · meva/test"]
     MED --> SMP["samples/ (quick-check images and videos)"]
     CK --> C1["sam3/ · yolo/"]
 ```
@@ -19,11 +20,12 @@ To re-download: `bash dev/scripts/pull_meva.sh` (needs only curl; skips files al
 | Set | Path | Content |
 |---|---|---|
 | Pool | `workspace/media/meva/pool/` | School site, cameras G299 and G330, 2018-03-07 09:55–10:55: 24 clips of 5 min, 4.2 GB |
+| Val | `workspace/media/meva/val/` | Same cameras, the pool day, 11:30–11:40 (D-31): 4 clips of 5 min |
 | Test | `workspace/media/meva/test/` | Same cameras, five other days (D-32), 15 min per camera each: 2018-03-09 10:10, 03-11 11:15, 03-12 10:00, 03-13 15:55, 03-15 14:55. 30 clips |
 
 - **Format:** H.264 in `.avi` with B-frames, 1920×1080. Measured at ingest (M1): 30 clips, 270,243 frames; every gap between frames is exactly 1/30 s; each clip's frame count matches ffprobe and the AVI header. The pool sampled at 2 fps is 14,424 frames.
 - **Why this slice:** one site and two fixed cameras over a continuous hour is what raw CCTV looks like. The test footage comes from other days, so it shares no near-duplicate frames with the pool (D-13), and from five of them, so no single event dominates it (D-32).
-- **Other hours on the bucket** for G299 and G330 (checked 2026-11-26, clips per hour folder, both cameras): 03-05 at 10 and 11 h; 03-07 at 09, 11 and 17 h (for val, D-31); 03-11 at 11, 14 and 16 h; 03-12 at 10 h; 03-13 at 16 and 17 h; 03-15 at 15 h. 03-09 has only hour 10.
+- **Other hours on the bucket** for G299 and G330 (checked 2026-11-26, clips per hour folder, both cameras): 03-05 at 10 and 11 h; 03-07 at 09, 11 (val, D-31) and 17 h (17:00–17:40; an empty gym at 17:00); 03-11 at 11, 14 and 16 h; 03-12 at 10 h; 03-13 at 16 and 17 h; 03-15 at 15 h. 03-09 has only hour 10.
 - **Source:** the public S3 bucket `mevadata-public-01` ([AWS Open Data](https://registry.opendata.aws/mevadata/)), folder `drops-123-r13/`. Paper: [arXiv 2012.00914](https://arxiv.org/abs/2012.00914).
 - **Activity annotations** (37 types, for the actions work later) are not downloaded yet. Kitware publishes them separately.
 - **Licence:** CC BY 4.0. Attribution required: *"Multiview Extended Video with Activities" (MEVA) dataset by Kitware Inc. and the Intelligence Advanced Research Projects Activity (IARPA)*, licensed under CC BY 4.0.

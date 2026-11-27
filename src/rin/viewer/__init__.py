@@ -67,8 +67,10 @@ def show(
     """
     if not isinstance(name, str) or not NAME.match(name):
         raise ValueError(f"name must be letters, digits, '-' or '_', got {name!r}")
-    if draw is not None and (not isinstance(draw, str) or not NAME.match(draw) or draw.startswith(("run_", "hints_"))):
-        raise ValueError(f"draw must be a field name (letters, digits, '-', '_', not 'run_...' or 'hints_...'), got {draw!r}")
+    if draw is not None and (not isinstance(draw, str) or not NAME.match(draw) or draw.startswith(("run_", "hints_", "marks_"))):
+        raise ValueError(
+            f"draw must be a field name (letters, digits, '-', '_', not 'run_...', 'hints_...' or 'marks_...'), got {draw!r}"
+        )
     classes = list(classes)
     if draw is not None and (not classes or not all(isinstance(c, str) and c for c in classes)):
         raise ValueError(f"classes must be non-empty class names, got {classes!r}")

@@ -39,11 +39,11 @@ Every person the user drew is at least 32 px tall (median 97 px): none in the < 
 | 03-13, 03-09 | | 3 frames | 0 | 0 | 0 | 0 | 0 |
 | 03-13 | G330 | 1680 | 0 | 5 | 4 | 0 | 4 |
 
-**The 12 people SAM3 missed above 0.5:** 11 of them have a SAM3 box between 0.1 and 0.5. Mostly people half hidden in the crowd or behind others; two are heads in a dense crowd.
+**The 12 people SAM3 missed above 0.5, on the mask boxes** (11 on the detector boxes of the table): 11 of the 12 have a SAM3 box between 0.1 and 0.5. Mostly people half hidden in the crowd or behind others; two are heads in a dense crowd.
 
 ![missed](missed_at_0.5.jpg)
 
-**The 30 SAM3 boxes above 0.5 with no person's box.** The user's judgement: only 10 are not people (bags and coats on the bleachers, a chair with a jacket, one camera artifact); the other 20 are people, mostly seated, which the user could tell only from the chair ("otherwise just a blob"), and SAM3 found them where the user didn't. By overlap, about 11 of those 20 lie apart from every user box (people the user missed) and about 9 lie mostly inside one (73–100%): some of these are a second box on an already-boxed person, still an error at checking time. So SAM3's precision at > 0.5 is **0.90–0.95**, not 0.85, and the person's blind boxes missed roughly a tenth of the people.
+**The 30 SAM3 boxes above 0.5 with no person's box, on the mask boxes** (29 on the detector boxes). The user's judgement: only 10 are not people (bags and coats on the bleachers, a chair with a jacket, one camera artifact); the other 20 are people, mostly seated, which the user could tell only from the chair ("otherwise just a blob"), and SAM3 found them where the user didn't. By overlap, about 11 of those 20 lie apart from every user box (people the user missed) and about 9 lie mostly inside one (73–100%): some of these are a second box on an already-boxed person, still an error at checking time. So SAM3's precision at > 0.5 is **0.90–0.95**, not 0.85, and the person's blind boxes missed roughly a tenth of the people.
 
 ![wrong](false_at_0.5.jpg)
 
@@ -51,6 +51,6 @@ Every person the user drew is at least 32 px tall (median 97 px): none in the < 
 
 - **SAM3 is a good starting point at a 0.5 gate:** 94% of the people the user boxed, 90–95% of its boxes right, and people the user missed. Checking means deleting about 1 box in 10–20 and adding about 1 person in 15, not drawing from scratch.
 - **Neither alone is the truth:** the blind person missed about a tenth of the people; SAM3 missed 6%. SAM3 first and a person correcting catches both (D-33). Automation bias still matters (a person may trust a wrong box), which is why the hint layer and the `done` tag ask for a look at every frame.
-- **The misses are recoverable:** 11 of 12 are SAM3 boxes scored 0.1–0.5. Showing those as a second, optional layer lets the person accept them instead of drawing (D-27's cheapest fix).
+- **The misses are recoverable:** 11 of the 12 on the mask boxes are SAM3 boxes scored 0.1–0.5. Showing those as a second, optional layer lets the person accept them instead of drawing (D-27's cheapest fix).
 - **Tiny people did not show up here:** nobody under 32 px was boxed on these 18 frames, so no ignore rule is needed for them yet. The 2 skipped crowded frames are where it could matter; step 4 checks every frame anyway.
 - **Time:** 7 s per box from scratch. Correcting SAM3's boxes should cost a fraction of that; step 4 measures it.

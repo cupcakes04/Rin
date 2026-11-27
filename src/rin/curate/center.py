@@ -1,5 +1,5 @@
-"""curate.center: subtract each camera's mean vector, so what all its frames share (the fixed
-background) drops out and what differs (the people) is left.
+"""curate.center: subtract each stream's mean vector (one camera, day and split), so what all
+its frames share (the fixed background) drops out and what differs (the people) is left.
 
 On MEVA, two random frames of one camera have a median whole-frame cosine of 0.95; with the
 camera's mean removed, about 0.0 (holy grail §4). The result is an ordinary embedding run, so
@@ -11,23 +11,24 @@ from __future__ import annotations
 import numpy as np
 import pyarrow as pa
 
+from rin.curate.streams import stream_sql
 from rin.master import Master
 from rin.run import Run
 
 
 def center(m: Master, emb: Run) -> Run:
-    """A new embedding run: every vector minus the mean of its camera's vectors of the same kind.
+    """A new embedding run: every vector minus the mean of its stream's vectors of the same kind.
 
-    A camera is the media's `camera`; a media without one is its own group. The mean is over the
-    frames in `emb`, so it describes those frames' shared background, not the whole recording.
+    A stream is one camera on one day in one split (`rin.curate.streams`); a media without a
+    camera is its own stream. The mean is over the frames in `emb`, so it describes those
+    frames' shared background, not the whole recording.
     """
     if "embeddings" not in emb.tables:
         raise TypeError(f"center needs an embedding run; {emb.id} wrote {emb.tables}")
     # model stays null: centring is a rule; the model is on the input run (`inputs`).
-    with m.writer(step="curate.center", config={"by": "camera"}, inputs=[emb.id]) as w:
+    with m.writer(step="curate.center", config={"by": "stream"}, inputs=[emb.id]) as w:
         index = m.sql(
-            """SELECT e.row, e.media_id, e.frame_idx, e.instance_idx, e.kind,
-                      coalesce('camera ' || d.camera, 'media ' || d.media_id) AS grp
+            f"""SELECT e.row, e.media_id, e.frame_idx, e.instance_idx, e.kind, {stream_sql()} AS grp
                FROM embeddings e JOIN media d USING (media_id)
                WHERE e.run_id = ? ORDER BY e.row""",
             [emb.id],

@@ -4,7 +4,7 @@
 set -euo pipefail
 BASE=https://mevadata-public-01.s3.amazonaws.com
 D="$(cd "$(dirname "$0")/../.." && pwd)/workspace/media/meva"
-mkdir -p "$D/pool" "$D/test"
+mkdir -p "$D/pool" "$D/val" "$D/test"
 
 pull() { # s3_prefix dest_dir camera_regex max_files
   keys=$(curl -s --fail "$BASE/?list-type=2&prefix=$1" | grep -oP '(?<=<Key>)[^<]+' | grep -E "$3" | head -n "$4")
@@ -17,6 +17,8 @@ pull() { # s3_prefix dest_dir camera_regex max_files
 
 # Pool: school site, cameras G299 + G330, 2018-03-07 09:55-10:55 (24 clips of 5 min)
 pull drops-123-r13/2018-03-07/10/ "$D/pool" 'school\.G(299|330)\.' 100
+# Val (D-31): same cameras, the pool day, 11:30-11:40 (2 clips per camera; 17:00 was an empty gym)
+pull drops-123-r13/2018-03-07/11/ "$D/val" '2018-03-07\.11-3[05]-00\..*school\.G(299|330)\.' 4
 # Test (D-32): same cameras, five other days, 15 min per camera each (6 clips per window)
 pull drops-123-r13/2018-03-09/10/ "$D/test" 'school\.G(299|330)\.' 6   # 10:10-10:25
 pull drops-123-r13/2018-03-11/11/ "$D/test" 'school\.G(299|330)\.' 6   # 11:15-11:30

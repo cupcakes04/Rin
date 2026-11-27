@@ -2,7 +2,7 @@
 
     uv run --project src/rin/servants/dinov3 python job.py <spec.json>
 
-Reads spec.json (model, size, what, batch_size, images) and writes, next to it:
+Reads spec.json (model, revision, size, what, batch_size, images) and writes, next to it:
 - embeddings.npy: float16, (len(what) * len(images), dim). Rows are grouped by kind in the
   order of `what`; within a kind, in the order of `images`.
 - job.json: the model revision and library versions, for the run's provenance.
@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import sys
+import threading
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
@@ -35,11 +36,20 @@ def main(spec_file: Path) -> None:
     if not torch.cuda.is_available():
         raise SystemExit("CUDA is not available to the DINOv3 job")
 
-    processor = AutoImageProcessor.from_pretrained(spec["model"])
+    # Offline, at the pinned commit: a run never quietly downloads a newer model.
+    pinned = {"revision": spec["revision"], "local_files_only": True}
+    # One processor per prefetch thread: a shared one isn't documented as thread-safe.
+    local = threading.local()
+
+    def processor() -> AutoImageProcessor:
+        if not hasattr(local, "processor"):
+            local.processor = AutoImageProcessor.from_pretrained(spec["model"], **pinned)
+        return local.processor
+
     # float32 weights + float16 autocast: matrix products run in float16, while the steps that
     # can overflow stay in float32. Weights loaded *as* float16 overflow inside the network and
     # every vector comes out NaN (measured here); this setting matches float32 (cosine 1.0000).
-    model = AutoModel.from_pretrained(spec["model"], dtype=torch.float32, attn_implementation="sdpa")
+    model = AutoModel.from_pretrained(spec["model"], dtype=torch.float32, attn_implementation="sdpa", **pinned)
     model = model.cuda().eval()
     registers = model.config.num_register_tokens
     n = len(paths)
@@ -52,7 +62,7 @@ def main(spec_file: Path) -> None:
         for p in batch:
             with Image.open(p) as image:
                 images.append(image.convert("RGB"))
-        inputs = processor(images=images, size={"height": height, "width": width}, return_tensors="pt")
+        inputs = processor()(images=images, size={"height": height, "width": width}, return_tensors="pt")
         return inputs["pixel_values"]
 
     starts = range(0, n, batch_size)
@@ -81,19 +91,17 @@ def main(spec_file: Path) -> None:
     del vectors
 
     (out_dir / "job.json").write_text(json.dumps({
-        "model_revision": _revision(spec["model"]),
+        "model_revision": _revision(spec["model"], spec["revision"]),
         "versions": {"torch": torch.__version__, "transformers": transformers.__version__},
     }))
 
 
-def _revision(model: str) -> str | None:
+def _revision(model: str, revision: str) -> str:
     """The Hugging Face commit the weights came from: the cache keeps each download under
-    snapshots/<commit>/. None when `model` is a local folder, which has no commit."""
-    if Path(model).is_dir():
-        return None
-    config = try_to_load_from_cache(model, "config.json")
+    snapshots/<commit>/, so the folder holding config.json names it."""
+    config = try_to_load_from_cache(model, "config.json", revision=revision)
     if not isinstance(config, str):
-        raise RuntimeError(f"{model} loaded, but its config.json isn't in the Hugging Face cache")
+        raise RuntimeError(f"{model} loaded, but its config.json at {revision} isn't in the Hugging Face cache")
     return Path(config).parent.name
 
 

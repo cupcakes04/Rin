@@ -5,16 +5,18 @@ from __future__ import annotations
 import numpy as np
 import pyarrow as pa
 
+from rin.curate.streams import stream_sql
 from rin.master import Master
 from rin.run import Run
 
 
 def dedupe(m: Master, frames: Run, emb: Run, *, cosine_max: float, kind: str = "cls") -> Run:
-    """Walk each camera's frames in time order; keep a frame only if its embedding's cosine
+    """Walk each stream's frames in time order; keep a frame only if its embedding's cosine
     similarity to the last kept frame is below `cosine_max`.
 
-    A camera's clips are walked as one stream when the media rows know the camera and the
-    start time (`describe` at ingest); otherwise each media is walked on its own.
+    A stream is one camera on one day in one split (`rin.curate.streams`): its clips are walked
+    as one when the media rows know the camera and the start time (`describe` at ingest);
+    otherwise each media is walked on its own.
     Comparing with the last kept frame (not every kept frame) removes runs of near-copies, such
     as a person standing still for a minute, and lets a scene that returns later count again:
     spreading the budget over the whole pool is selection's job, not this step's.
@@ -29,9 +31,9 @@ def dedupe(m: Master, frames: Run, emb: Run, *, cosine_max: float, kind: str = "
     config = {"cosine_max": cosine_max, "kind": kind}
     with m.writer(step="curate.dedupe", config=config, inputs=[frames.id, emb.id]) as w:
         rows = m.sql(
-            """SELECT s.media_id, s.frame_idx, e.row,
-                      CASE WHEN d.camera IS NOT NULL AND d.started_at IS NOT NULL
-                           THEN 'camera ' || d.camera ELSE 'media ' || d.media_id END AS stream
+            f"""SELECT s.media_id, s.frame_idx, e.row,
+                      CASE WHEN d.started_at IS NULL THEN 'media ' || d.media_id
+                           ELSE {stream_sql()} END AS stream
                FROM frame_sets s
                JOIN media d USING (media_id)
                JOIN frames f USING (media_id, frame_idx)

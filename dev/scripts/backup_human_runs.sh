@@ -1,20 +1,23 @@
 #!/usr/bin/env bash
-# Copy every run that holds a person's work (human.*) out of the workspace, into one dated
-# archive in the folder you name. The rest of the store can be rebuilt from the media and
-# the code; these runs cannot.
+# Copy every run that holds a person's work (human.*) out of the store, into one dated
+# archive. The rest of the store can be rebuilt from the media and the code; these runs cannot.
 #
-#   bash dev/scripts/backup_human_runs.sh /mnt/c/Users/<you>/rin_backups
+#   bash dev/scripts/backup_human_runs.sh            # into workspace/backups/
+#   bash dev/scripts/backup_human_runs.sh <folder>   # anywhere else
 #
-# A folder on the Windows side (/mnt/c/...) survives a broken WSL disk; one inside WSL doesn't.
+# workspace/backups/ is on the same WSL disk as the store: it survives a deleted or broken
+# store, not a broken disk.
 set -euo pipefail
 
-if [ $# -ne 1 ]; then
-    echo "usage: $0 <backup folder>" >&2
+if [ $# -gt 1 ]; then
+    echo "usage: $0 [backup folder]" >&2
     exit 1
 fi
-dest="$1"
-store="$(cd "$(dirname "$0")/../.." && pwd)/workspace/store"
-mkdir -p "$dest"
+root="$(cd "$(dirname "$0")/../.." && pwd)"
+store="$root/workspace/store"
+folder="${1:-$root/workspace/backups}"
+mkdir -p "$folder"
+dest="$(cd "$folder" && pwd)"  # absolute, so a relative folder still works after the cd below
 cd "$store"
 shopt -s nullglob
 runs=(runs/*-human.*)
