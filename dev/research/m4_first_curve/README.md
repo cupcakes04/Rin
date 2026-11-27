@@ -31,6 +31,8 @@ A 1-epoch run (`20261127-150221-yolo.train-aab1`) scores 0.002: an artefact of a
 
 Evaluation runs: stock `20261127-152517-evaluate.coco-037b` (640), `20261127-152529-evaluate.coco-7d92` (1280); students `20261127-153124-evaluate.coco-1abc`, `20261127-154017-evaluate.coco-2a24`, `20261127-155315-evaluate.coco-53d9`, `20261127-161556-evaluate.coco-dedd`. Peak VRAM 10.0 GiB; training time is about 21 ms per frame and epoch plus a fixed part.
 
+**Known faults, redone in M4 step 6** ([audit 2026-11-27](../../audits/2026-11-27.md), triage at its end): the stock rows are too low, because `yolo.predict` kept persons only after Ultralytics' 100 boxes per frame were shared among all 80 COCO classes (44 person boxes on the 60-person frame); and the fixed 50 epochs gave small budgets far fewer optimizer steps (about 80 at 100 frames, 780 at 1,000), so the gains below and the fall of ghosts with N mix frames with training. No random budget here holds an empty frame.
+
 ## Verdict
 
 - **The student learns from unchecked labels**, and beats stock yolo26s at every budget, most of all on **small people**: mAP_small 0.09 → 0.28, AR_small 0.23 → 0.42–0.48. Domain tuning helps where a stock detector is weakest, which is the point of the loop.

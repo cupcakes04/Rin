@@ -66,7 +66,7 @@ flowchart LR
 
 Measured in M2 ([research](../../research/m2_filters_dedupe/README.md)): two random frames of one camera have a median whole-frame cosine of 0.95, so the background does dominate. One person crossing an empty gym moves the vector by 0.006.
 
-Actor features, in order to try: (1) remove each camera's mean vector; (2) patch tokens minus the camera's mean patch grid, pooled where they differ (no detector, no class). Ruled out for selection: SAM3 (circular: it is the teacher being budgeted), Sapiens2 (built for pose, heavy). Stock YOLO boxes are possible but messy, and miss the small, occluded people most worth labelling.
+Actor features, in order to try: (1) remove each camera's mean vector; (2) patch tokens minus the camera's mean patch grid, pooled where they differ (no detector, no class). v1 pooled DINOv3 patch tokens inside a box with RoIAlign; read it for the grid arithmetic (`dev/rin_v1/src/rin/data/transform/pooler.py:168-182`). Ruled out for selection: SAM3 (circular: it is the teacher being budgeted), Sapiens2 (built for pose, heavy). Stock YOLO boxes are possible but messy, and miss the small, occluded people most worth labelling.
 
 This is the most likely place the idea fails at first, and the most interesting one to get right. A first negative result means "try §4", not "the idea failed".
 

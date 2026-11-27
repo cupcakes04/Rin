@@ -267,7 +267,7 @@ for (meth, s), picks in sel.items():
 - **What:** 3 methods × 3 seeds × 4 budgets = 36 exports, trainings and evaluations, each a run with tags.
 - **Why:** one fixed student (D-17) and one fixed test set, so the only thing that changes is which frames went in.
 - **Without it:** no proof, only a feeling that curation helped.
-- **Cost:** 36 trainings. Time per training isn't measured yet; M4 measures one first and may cut budgets or epochs.
+- **Cost:** 36 trainings; time per training is measured in [m4_first_curve](../research/m4_first_curve/README.md).
 
 ### C4 · The result is a query
 
