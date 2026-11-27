@@ -1,9 +1,10 @@
 """curate.select: a ranked selection of frames for labelling (D-28, D-38).
 
 Every method writes a frame set whose `rank` orders the picks, so budget N is the first N.
-`kcenter` and `kmeans_stratified` work on each stream (one camera, day and split) alone, by
-Euclidean distance between raw vectors, and the streams take turns in the merged ranking; so
-every budget is spread evenly over the cameras (D-38). `random` draws over all frames at once.
+Every method works on each stream (one camera, day and split) alone, and the streams take
+turns in the merged ranking, so every budget is spread evenly over the cameras and methods
+differ only in the order within a stream (D-38). `kcenter` and `kmeans_stratified` use
+Euclidean distance between raw vectors; `random` uses none. Only `pool` frames are selected.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ KMEANS_ITERATIONS = 100
 def select(
     m: Master,
     frames: Run,
-    emb: Run,
+    emb: Run | None,
     *,
     method: str,
     n_max: int,
@@ -33,9 +34,10 @@ def select(
     clusters: int | None = None,
     kind: str = "cls",
 ) -> Run:
-    """Rank up to `n_max` frames of frame set `frames` with `method`, using `emb`'s `kind` vectors.
+    """Rank up to `n_max` frames of frame set `frames` with `method`, using `emb`'s `kind` vectors
+    (`emb` is None for `random`, which uses no vectors).
 
-    random:            a random order over all frames (the same draw as `curate.random`).
+    random:            per stream, a random order.
     kcenter:           per stream, farthest-point: a first frame drawn by `seed`, then again and
                        again the frame farthest from every frame picked so far.
     kmeans_stratified: per stream, k-means into `clusters` groups; then rounds of one frame per
@@ -56,15 +58,31 @@ def select(
         raise ValueError(f"clusters is only for kmeans_stratified, not {method}")
     if "frame_sets" not in frames.tables:
         raise TypeError(f"select needs a frame set; {frames.id} wrote {frames.tables}")
-    if "embeddings" not in emb.tables:
-        raise TypeError(f"select needs an embedding run; {emb.id} wrote {emb.tables}")
+    if method == "random":
+        if emb is not None:
+            raise ValueError("random uses no vectors: pass emb=None")
+    elif emb is None:
+        raise TypeError(f"{method} needs an embedding run, got None")
+    elif "embeddings" not in emb.tables:
+        raise TypeError(f"{method} needs an embedding run; {emb.id} wrote {emb.tables}")
     if not 0 < n_max <= len(frames):
         raise ValueError(f"n_max must be between 1 and the {len(frames)} frames of {frames.id}, got {n_max}")
 
-    config = {"method": method, "n_max": n_max, "seed": seed, "kind": kind}
+    not_pool = m.sql(
+        """SELECT DISTINCT d.split FROM frame_sets s JOIN media d USING (media_id)
+           WHERE s.run_id = ? AND d.split <> 'pool' ORDER BY 1""",
+        [frames.id],
+    ).fetchall()
+    if not_pool:
+        raise ValueError(f"{frames.id} holds {[r[0] for r in not_pool]} frames; selection reads only pool frames")
+
+    config = {"method": method, "n_max": n_max, "seed": seed}
+    if emb is not None:
+        config["kind"] = kind
     if clusters is not None:
         config["clusters"] = clusters
-    with m.writer(step="curate.select", config=config, inputs=[frames.id, emb.id]) as w:
+    inputs = [frames.id] if emb is None else [frames.id, emb.id]
+    with m.writer(step="curate.select", config=config, inputs=inputs) as w:
         rows = m.sql(
             f"""SELECT s.media_id, s.frame_idx, e.row, {stream_sql()} AS stream
                 FROM frame_sets s
@@ -73,34 +91,34 @@ def select(
                      USING (media_id, frame_idx)
                 WHERE s.run_id = ?
                 ORDER BY s.media_id, s.frame_idx""",
-            [emb.id, kind, frames.id],
+            [emb.id if emb is not None else "", kind, frames.id],
         ).fetchall()
-        missing = [(media_id, idx) for media_id, idx, row, _ in rows if row is None]
-        if missing:
-            raise ValueError(f"{emb.id} has no {kind!r} vector for {len(missing)} frames, e.g. {missing[:3]}")
+        if emb is not None:
+            missing = [(media_id, idx) for media_id, idx, row, _ in rows if row is None]
+            if missing:
+                raise ValueError(f"{emb.id} has no {kind!r} vector for {len(missing)} frames, e.g. {missing[:3]}")
 
         rng = np.random.default_rng(seed)
-        if method == "random":
-            # Over (media_id, frame_idx) order, like curate.random: same seed, same frames.
-            order = list(rng.permutation(len(rows))[:n_max])
-        else:
-            vectors = emb.vectors()
-            by_stream: dict[str, list[int]] = defaultdict(list)
-            for i, (_, _, _, stream) in enumerate(rows):
-                by_stream[stream].append(i)
-            ranked = []
-            for stream in sorted(by_stream):
-                members = by_stream[stream]
+        vectors = emb.vectors() if emb is not None else None
+        by_stream: dict[str, list[int]] = defaultdict(list)
+        for i, (_, _, _, stream) in enumerate(rows):
+            by_stream[stream].append(i)
+        ranked = []
+        for stream in sorted(by_stream):
+            members = by_stream[stream]
+            n = min(n_max, len(members))
+            if method == "random":
+                picks = [int(p) for p in rng.permutation(len(members))[:n]]
+            else:
                 x = vectors[[rows[i][2] for i in members]].astype(np.float64)
-                n = min(n_max, len(members))
                 if method == "kcenter":
                     picks = _kcenter(x, n, rng)
                 else:
                     if clusters > len(members):
                         raise ValueError(f"{stream} has {len(members)} frames, fewer than clusters={clusters}")
                     picks = _stratified(_kmeans(x, clusters, rng), n, rng)
-                ranked.append([members[p] for p in picks])
-            order = _in_turns(ranked)[:n_max]
+            ranked.append([members[p] for p in picks])
+        order = _in_turns(ranked)[:n_max]
 
         w.write("frame_sets", pa.table({
             "media_id": [rows[i][0] for i in order],

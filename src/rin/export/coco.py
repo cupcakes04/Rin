@@ -25,6 +25,8 @@ def coco(m: Master, truth: Run, *, classes: list[str], crowd: dict[str, str] | N
     other class is refused."""
     if not isinstance(classes, list) or not classes or any(not isinstance(c, str) or not c for c in classes):
         raise ValueError(f"classes must be a non-empty list of class names, got {classes!r}")
+    if len(set(classes)) != len(classes):
+        raise ValueError(f"classes lists a name twice: {classes}")
     crowd = dict(crowd or {})
     if any(k in classes or v not in classes for k, v in crowd.items()):
         raise ValueError(f"crowd must map crowd classes (not in classes) to classes in {classes}, got {crowd}")

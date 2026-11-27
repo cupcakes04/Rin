@@ -117,12 +117,12 @@ def _check_labelled(m: Master, labels: list[Run], frames: list[tuple[str, int]])
 
 
 def _without_duplicates(boxes: pd.DataFrame, iou_min: float) -> np.ndarray:
-    """Per frame, highest score first (a person's box, without a score, counts as highest):
-    keep a box unless it overlaps a box already kept by at least `iou_min`."""
+    """Per frame and class, highest score first (a person's box, without a score, counts as
+    highest): keep a box unless it overlaps a kept box of its class by at least `iou_min`."""
     keep = np.zeros(len(boxes), bool)
     score = boxes.score.fillna(np.inf).to_numpy()
     xyxy = boxes[["x0", "y0", "x1", "y1"]].to_numpy()
-    for _, idx in boxes.groupby(["media_id", "frame_idx"]).indices.items():
+    for _, idx in boxes.groupby(["media_id", "frame_idx", "class"]).indices.items():
         kept: list[int] = []
         for i in idx[np.argsort(-score[idx], kind="stable")]:
             if kept:

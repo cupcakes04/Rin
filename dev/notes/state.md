@@ -20,11 +20,12 @@ flowchart LR
 - **Audit of M4 triaged with the user** (2026-11-27, [report](../audits/2026-11-27.md), triage at its end). Checked: Ultralytics stepped once per 8 batches with an unrecorded optimizer, so small budgets trained far less; `yolo.predict` capped the stock baseline's person boxes; val holds no empty frame. The user's calls: reopen M4 rather than carry the fixes into M5; D-40 (explicit optimizer, a step per batch, a step floor), D-41 (quiet frames stay in the pool), D-31 (val gains 17:00 empty-gym clips), D-38 (random per camera).
 
 ## Next
-1. **M4 step 6a, code fixes** ([M4.md](milestones/M4.md)): confirm with the user, then build. Then 6b (step floor), 6c (quiet frames), 6d (redo the curve), and M4 closes.
+1. **M4 step 6b, training steps** ([M4.md](milestones/M4.md)): 6a is done (fixes, 186 tests, GPU smoke). 6b repeats small training sets rather than lengthening them (Ultralytics validates every epoch); confirm with the user, then run (about 1.5 h GPU). Then 6c (quiet frames), 6d (redo the curve), and M4 closes.
 2. **Plan M5** from the parked-debt rows triggered by "M5 is planned" ([milestones/](milestones/README.md#parked-debt)).
 
 ## Waiting on the user
-- **Commit:** the triage (audit report with its triage, decisions D-31/38/40/41, `M4.md`, milestones and parked debt, `m4_first_curve` faults note, `holy_grail`, `models/README`, `usage`, this file).
+- **6b's plan:** a yes to repeating small training sets (`epoch_images`) and to the seven-run measurement.
+- **Commit:** step 6a's code and tests, the audit-before-close rule in `CLAUDE.md`, and the triage (audit report with its triage, decisions D-31/38/40/41, `M4.md`, milestones and parked debt, `m4_first_curve` faults note, `holy_grail`, `models/README`, `usage`, this file).
 
 ## Vendor feature requests (to the user)
 None open.

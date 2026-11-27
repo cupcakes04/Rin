@@ -65,13 +65,31 @@ def _on_a_line(m: Master, frames: Run) -> Run:
     return _embedding(m, frames, {(c, i): [i + (100 if c == "B" else 0), 0] for _, i, c in _keys(m, frames)})
 
 
-def test_random_is_the_same_draw_as_curate_random(m: Master, frames: Run) -> None:
-    emb = _on_a_line(m, frames)
-    sel = curate.select(m, frames, emb, method="random", n_max=10, seed=3)
-    assert sel.frame_set().df()[["media_id", "frame_idx"]].values.tolist() == (
-        curate.random(m, frames, n=10, seed=3).frame_set().df()[["media_id", "frame_idx"]].values.tolist()
-    )
-    assert sel.config == {"method": "random", "n_max": 10, "seed": 3, "kind": "cls"}
+def test_random_takes_cameras_in_turns_and_needs_no_vectors(m: Master, frames: Run) -> None:
+    sel = curate.select(m, frames, None, method="random", n_max=28, seed=3)
+    picks = _picks(m, sel)
+    assert [c for c, _ in picks[:24]] == ["A", "B"] * 12  # B's 12 frames run out, A's last 4 follow
+    assert sorted(picks) == sorted((c, i) for _, i, c in _keys(m, frames))
+    assert sel.config == {"method": "random", "n_max": 28, "seed": 3} and sel.inputs == [frames.id]
+    assert _picks(m, curate.select(m, frames, None, method="random", n_max=28, seed=3)) == picks
+    assert _picks(m, curate.select(m, frames, None, method="random", n_max=28, seed=4)) != picks
+
+
+def test_random_refuses_vectors_and_the_others_need_them(m: Master, frames: Run) -> None:
+    with pytest.raises(ValueError, match="emb=None"):
+        curate.select(m, frames, _on_a_line(m, frames), method="random", n_max=5, seed=0)
+    with pytest.raises(TypeError, match="needs an embedding run"):
+        curate.select(m, frames, None, method="kcenter", n_max=5, seed=0)
+
+
+def test_select_reads_only_pool_frames(m: Master, workspace: Path) -> None:
+    folder = workspace / "media" / "val_clip"
+    folder.mkdir()
+    make_clip(folder / "V.mkv", CFR_STARTS_MS[:6], rate=10)
+    val = core.sample(m, core.ingest(m, folder, split="val", describe=lambda _: {
+        "site": "gym", "camera": "A", "started_at": datetime(2018, 3, 7, 11, 0)}), fps=10)
+    with pytest.raises(ValueError, match="selection reads only pool frames"):
+        curate.select(m, val, None, method="random", n_max=3, seed=0)
 
 
 def test_kcenter_picks_the_farthest_frame_each_time_per_camera_in_turns(m: Master, frames: Run) -> None:
@@ -124,6 +142,6 @@ def test_the_same_seed_picks_the_same_frames(m: Master, frames: Run) -> None:
     ],
 )
 def test_select_checks_arguments(m: Master, frames: Run, kwargs: dict, error: str) -> None:
-    emb = _on_a_line(m, frames)
+    emb = None if kwargs["method"] == "random" else _on_a_line(m, frames)
     with pytest.raises(ValueError, match=error):
         curate.select(m, frames, emb, **{"n_max": 5, "seed": 0, **kwargs})

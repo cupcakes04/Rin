@@ -22,7 +22,7 @@ def _boxes(m: Master, step: str, inputs: list[str], boxes: list[tuple], *, frame
     n = len(boxes)
     with m.writer(step=step, config={}, inputs=inputs) as w:
         if frame_set is not None:
-            w.write("frame_sets", frame_set.frame_set().fetch_arrow_table())
+            w.write("frame_sets", frame_set.frame_set().to_arrow_table())
         w.write("instances", pa.table({
             "instance_idx": pa.array(range(n), pa.int64()), "media_id": [b[0] for b in boxes],
             "frame_idx": pa.array([b[1] for b in boxes], pa.int64()), "class": [b[2] for b in boxes],
@@ -61,6 +61,11 @@ def test_export_coco_writes_pixels_crowds_and_empty_frames(m: Master, scene: dic
 def test_export_coco_refuses_an_unknown_class(m: Master, scene: dict) -> None:
     with pytest.raises(ValueError, match="crowd"):
         export.coco(m, scene["truth"], classes=["person"])
+
+
+def test_export_coco_refuses_a_class_listed_twice(m: Master, scene: dict) -> None:
+    with pytest.raises(ValueError, match="twice"):
+        export.coco(m, scene["truth"], classes=["person", "person"], crowd={"crowd": "person"})
 
 
 @pytest.mark.parametrize(

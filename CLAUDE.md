@@ -34,11 +34,12 @@ flowchart LR
 2. Update the decisions, ideas and milestone file the work touched.
 3. Compact: delete what no longer holds.
 
-**Audits:** after a milestone, the user may give [dev/audit.md](dev/audit.md) to an outside agent, on purpose another model (its blind spots differ from Claude's), in a fresh session. It reads widely and writes one report to `dev/audits/<date>.md`. Not to the inbox: the inbox is the user's voice, a report is another model's view. Breadth is the auditor's job, precision the engineering session's:
+**Audits:** when a milestone's steps are done, and before it closes, the user may give [dev/audit.md](dev/audit.md) to an outside agent, on purpose another model (its blind spots differ from Claude's), in a fresh session. It reads widely and writes one report to `dev/audits/<date>.md`. Not to the inbox: the inbox is the user's voice, a report is another model's view. Breadth is the auditor's job, precision the engineering session's:
 - **The prompt never says what to look for**, only how to write a finding down (file and line). Steering the auditor makes it look where the agent would, which defeats using another model.
 - **The report is a perspective, not a to-do list.** At triage the agent verifies against the code only the findings that would change the next milestone or an agreed decision, and gives the user a short triage in chat. The user decides what becomes work; that work goes where any work goes (milestone file, decisions).
 - **The record** is a short "Triage" section the agent appends to the report: each finding accepted, kept for later, or rejected, one line each with a reason.
 - **Only the obligations move into the notes** (D-35). Accepted findings become work like any other (milestone file, decisions). Each kept finding becomes one row in [parked debt](dev/notes/milestones/README.md#parked-debt): what to do, its trigger, a link to the report section. The finding's detail stays in the report, so a report is read once, at triage, and never again by habit.
+- **The milestone closes after the triage**, not before: accepted fixes land in its own file, so the next milestone starts from numbers that hold. M3 and M4 were both closed first and had to be reopened.
 - The agent never runs an audit itself.
 
 **Inbox vs chat:** the inbox is for big things: new intent, new ideas, changes of direction. Day-to-day milestone work (questions, feedback, small calls) happens in chat as usual, and follows the same loop on a smaller scale.

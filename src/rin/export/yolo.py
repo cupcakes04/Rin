@@ -27,8 +27,9 @@ from rin.servants.frame_cache import cache_frames
 
 def yolo(m: Master, ds: Dataset, *, classes: list[str], val: Dataset, tags: dict[str, Any] | None = None) -> Run:
     """Write `ds` as the train split and `val` as the val split. `classes` lists the class names
-    in YOLO's order (index 0 first); a box of any other class is refused. No recording may be
-    in both splits (D-13)."""
+    in YOLO's order (index 0 first); a box of any other class is refused. Train frames must
+    come from `pool` recordings and val frames from `val` ones (D-13, D-31), so the test set
+    can't slip into training by a swapped variable."""
     if not isinstance(classes, list) or not classes or any(not isinstance(c, str) or not c for c in classes):
         raise ValueError(f"classes must be a non-empty list of class names, got {classes!r}")
     if len(set(classes)) != len(classes):
@@ -41,9 +42,12 @@ def yolo(m: Master, ds: Dataset, *, classes: list[str], val: Dataset, tags: dict
         other = sorted(set(d.boxes["class"]) - set(classes))
         if other:
             raise ValueError(f"The {name} dataset has boxes of classes {other}, not in {classes}")
-    shared = {k[0] for k in ds.frames} & {k[0] for k in val.frames}
-    if shared:
-        raise ValueError(f"{len(shared)} recordings are in both train and val (D-13), e.g. {sorted(shared)[:3]}")
+    for name, d, want in (("train", ds, "pool"), ("val", val, "val")):
+        media = sorted({k[0] for k in d.frames})
+        splits = dict(m.sql("SELECT media_id, split FROM media WHERE media_id IN (SELECT unnest(?))", [media]).fetchall())
+        wrong = sorted({splits[k] for k in media} - {want})
+        if wrong:
+            raise ValueError(f"The {name} dataset has frames from {wrong} recordings; {name} takes only {want!r}")
 
     index = {c: i for i, c in enumerate(classes)}
     inputs = list(dict.fromkeys([*ds.inputs, *val.inputs]))

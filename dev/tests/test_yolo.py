@@ -67,15 +67,21 @@ def test_train_files_weights_metrics_and_leaves_the_export_untouched(
     metrics = dict(m.sql("SELECT name, value FROM metrics WHERE run_id = ?", [run.id]).fetchall())
     assert metrics["val/mAP50-95"] == 0.45 and metrics["seconds_per_epoch"] == 30.0
     assert dict(run.table("artifacts").fetchall())["best"] == "files/best.pt"
-    assert run.info["checkpoint"] == "yolo26s.pt" and len(run.info["checkpoint_sha256"]) == 64
+    assert run.info["model"] == "yolo26s" and run.info["checkpoint"] == "checkpoints/yolo/yolo26s.pt"
+    assert len(run.info["checkpoint_sha256"]) == 64
     assert seen["epochs"] == 4 and seen["seed"] == 1 and run.tags == {"n": 8}
+    # The optimizer is stated (D-40): what Ultralytics' "auto" picked for M4, one step per batch.
+    stated = {"optimizer": "AdamW", "lr0": 0.002, "momentum": 0.9, "warmup_bias_lr": 0.0, "accumulate": 1}
+    assert {k: seen[k] for k in stated} == stated and {k: run.config[k] for k in stated} == stated
     after = sorted(p.relative_to(m.layout.run_dir(exported.id)) for p in m.layout.run_dir(exported.id).rglob("*"))
     assert after == before  # the labels cache went into the copy, not the export
 
 
 @pytest.mark.parametrize(
     ("kwargs", "error"),
-    [({"imgsz": 650}, "multiple of 32"), ({"epochs": 0}, "epochs"), ({"batch": True}, "batch")],
+    [({"imgsz": 650}, "multiple of 32"), ({"epochs": 0}, "epochs"), ({"batch": True}, "batch"),
+     ({"optimizer": "auto"}, "never 'auto'"), ({"lr0": 0}, "lr0 must be above 0"), ({"momentum": 1.0}, "momentum"),
+     ({"accumulate": 0}, "accumulate")],
 )
 def test_train_checks_arguments(m: Master, exported: Run, checkpoint: Path, kwargs: dict, error: str) -> None:
     with pytest.raises(ValueError, match=error):
@@ -85,3 +91,50 @@ def test_train_checks_arguments(m: Master, exported: Run, checkpoint: Path, kwar
 def test_train_needs_an_export(m: Master, exported: Run, checkpoint: Path) -> None:
     with pytest.raises(TypeError, match="export.yolo"):
         yolo.train(m, m.run(exported.inputs[0]), model=checkpoint, epochs=2, imgsz=640, batch=4, seed=0)
+
+
+def _fake_predict(seen: dict, detections: list[dict]) -> object:
+    """Stands in for job.py's predict: records the spec, returns the given detections."""
+
+    def run(_job_dir: Path, spec_file: Path) -> None:
+        seen.update(json.loads(spec_file.read_text()))
+        (spec_file.parent / "job.json").write_text(json.dumps({
+            "detections": detections, "seconds": 1.0, "versions": {"torch": "fake", "ultralytics": "fake"},
+        }))
+
+    return run
+
+
+def test_predict_hands_classes_to_the_job_and_clamps_rounding(
+    m: Master, setup: dict[str, Run], checkpoint: Path, monkeypatch: pytest.MonkeyPatch  # noqa: F811
+) -> None:
+    seen: dict = {}
+    dets = [{"image": 0, "class": "person", "score": 0.8, "box": [-1e-7, 0.1, 0.5, 1.0000001]},
+            {"image": 1, "class": "person", "score": 0.4, "box": [0.2, 0.2, 0.4, 0.6]}]
+    monkeypatch.setattr(YOLO_MODULE, "run_job", _fake_predict(seen, dets))
+    run = yolo.predict(m, checkpoint, setup["val"], imgsz=1280, classes=["person"])
+    assert seen["classes"] == ["person"] and seen["max_det"] == 100
+    boxes = run.instances().df().sort_values("score", ascending=False)
+    assert boxes[["x0", "y1"]].values.tolist()[0] == [0.0, 1.0]
+    assert run.info["model"] == "yolo26s" and run.info["checkpoint"] == "checkpoints/yolo/yolo26s.pt"
+
+
+@pytest.mark.parametrize(
+    ("box", "cls", "error"),
+    [([0.1, 0.1, 1.001, 0.5], "person", "outside \\[0, 1\\]"), ([0.1, 0.1, 0.3, 0.5], "chair", "not asked for")],
+)
+def test_predict_refuses_what_the_job_should_not_return(
+    m: Master, setup: dict[str, Run], checkpoint: Path, monkeypatch: pytest.MonkeyPatch,  # noqa: F811
+    box: list, cls: str, error: str,
+) -> None:
+    monkeypatch.setattr(YOLO_MODULE, "run_job", _fake_predict({}, [{"image": 0, "class": cls, "score": 0.5, "box": box}]))
+    with pytest.raises((ValueError, RuntimeError), match=error):
+        yolo.predict(m, checkpoint, setup["val"], imgsz=1280, classes=["person"])
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "error"), [({"imgsz": 650}, "multiple of 32"), ({"classes": ["person", "person"]}, "twice")],
+)
+def test_predict_checks_arguments(m: Master, setup: dict[str, Run], checkpoint: Path, kwargs: dict, error: str) -> None:  # noqa: F811
+    with pytest.raises(ValueError, match=error):
+        yolo.predict(m, checkpoint, setup["val"], **{"imgsz": 640, **kwargs})

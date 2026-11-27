@@ -229,10 +229,11 @@ sel = {}
 for meth in methods:
     for s in seeds:
         extra = {"clusters": 50} if meth == "kmeans_stratified" else {}   # 50 per camera (M4)
-        sel[(meth, s)] = curate.select(m, cands, emb, method=meth, n_max=max(budgets), seed=s, **extra)
+        vectors = None if meth == "random" else emb
+        sel[(meth, s)] = curate.select(m, cands, vectors, method=meth, n_max=max(budgets), seed=s, **extra)
 ```
 
-- **What:** each call writes a **ranked** list of up to 1000 frames. Budget 250 means the first 250 of that list (D-28). `kcenter` and `kmeans_stratified` rank each camera on its own, by Euclidean distance, and take the cameras in turns, so every budget is half from each camera (D-38).
+- **What:** each call writes a **ranked** list of up to 1000 frames. Budget 250 means the first 250 of that list (D-28). Every method ranks each camera on its own (`kcenter` and `kmeans_stratified` by Euclidean distance) and takes the cameras in turns, so every budget is half from each camera (D-38).
 - **Why:** ranked lists make the budgets nested: the 250-frame set contains the 100-frame set. That makes the mAP curve smoother and means SAM3 labels far fewer frames in total.
 - **Without it:** each budget would be a separate selection, and the curve would jump between unrelated sets of frames.
 - **Worth adding:** `random` over `frames` (before filters) as a fourth line. It tells us how much the cheap filters alone buy, separately from the embedding methods.

@@ -5,11 +5,13 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
+import pandas as pd
 import pyarrow as pa
 import pytest
 from conftest import CFR_STARTS_MS, make_clip
 
 from rin import Master, Run, core, curate, export
+from rin.dataset import _without_duplicates
 
 
 @pytest.fixture
@@ -61,6 +63,14 @@ def test_dataset_gate_can_use_derived_size_and_drop_duplicates(m: Master, setup:
     assert ds.dropped_duplicates == len(ds.boxes)
 
 
+def test_duplicates_are_only_boxes_of_one_class() -> None:
+    boxes = pd.DataFrame({
+        "media_id": ["a"] * 3, "frame_idx": [0] * 3, "class": ["person", "backpack", "person"],
+        "score": [0.9, 0.8, 0.7], "x0": [0.1] * 3, "y0": [0.1] * 3, "x1": [0.3] * 3, "y1": [0.5] * 3,
+    })
+    assert _without_duplicates(boxes, 0.7).tolist() == [True, True, False]
+
+
 def test_dataset_refuses_frames_no_label_run_saw(m: Master, setup: dict[str, Run], workspace: Path) -> None:
     folder = workspace / "media" / "X"
     folder.mkdir()
@@ -96,10 +106,38 @@ def test_export_writes_yolo_files_and_freezes_the_dataset(m: Master, setup: dict
     assert run.tags == {"n": 8} and set(run.inputs) == {setup["pool"].id, setup["val"].id, setup["labels"].id}
 
 
-def test_export_refuses_a_recording_in_both_splits(m: Master, setup: dict[str, Run]) -> None:
-    train = m.dataset(labels=[setup["labels"]], frames=setup["pool"], top=8, gate="score >= 0.5")
-    val = m.dataset(labels=[setup["labels"]], frames=setup["pool"], gate="score >= 0.5")
-    with pytest.raises(ValueError, match="in both train and val"):
+@pytest.mark.parametrize(("train_from", "val_from", "error"), [
+    ("pool", "pool", "val dataset has frames from \\['pool'\\]"),
+    ("val", "val", "train dataset has frames from \\['val'\\]"),
+])
+def test_export_takes_train_from_pool_and_val_from_val(
+    m: Master, setup: dict[str, Run], train_from: str, val_from: str, error: str
+) -> None:
+    train = m.dataset(labels=[setup["labels"]], frames=setup[train_from], gate="score >= 0.5")
+    val = m.dataset(labels=[setup["labels"]], frames=setup[val_from], gate="score >= 0.5")
+    with pytest.raises(ValueError, match=error):
+        export.yolo(m, train, classes=["person"], val=val)
+
+
+def test_export_refuses_test_frames_in_training(m: Master, setup: dict[str, Run], workspace: Path) -> None:
+    folder = workspace / "media" / "T"
+    folder.mkdir()
+    make_clip(folder / "T.mkv", CFR_STARTS_MS[:4], rate=10)
+    test = core.sample(m, core.ingest(m, folder, split="test", describe=lambda _: {
+        "site": "gym", "camera": "G1", "started_at": datetime(2018, 3, 9, 10, 0)}), fps=10)
+    keys = test.frame_set().df()[["media_id", "frame_idx"]].values.tolist()
+    with m.writer(step="sam3.concept", config={}, inputs=[test.id]) as w:
+        w.write("instances", pa.table({
+            "instance_idx": list(range(len(keys))), "media_id": [k[0] for k in keys],
+            "frame_idx": [int(k[1]) for k in keys], "class": ["person"] * len(keys), "score": [0.9] * len(keys),
+            "x0": [0.1] * len(keys), "y0": [0.1] * len(keys), "x1": [0.2] * len(keys), "y1": [0.3] * len(keys),
+            "mask_rle": pa.nulls(len(keys), pa.string()), "keypoints": pa.nulls(len(keys)),
+            "track_id": pa.nulls(len(keys), pa.int64()),
+        }))
+    both = curate.union(m, [setup["pool"], test])
+    train = m.dataset(labels=[setup["labels"], m.run(w.run_id)], frames=both, gate="score >= 0.5")
+    val = m.dataset(labels=[setup["labels"]], frames=setup["val"], gate="score >= 0.5")
+    with pytest.raises(ValueError, match="train dataset has frames from \\['test'\\]"):
         export.yolo(m, train, classes=["person"], val=val)
 
 

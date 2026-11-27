@@ -1,6 +1,6 @@
 # Milestones
 
-> Planned **one ahead** (D-19). The running milestone gets one file, `M<n>.md`: scope, open points, measurements, and its debt to fix. When it is done, what lasts is folded out of it (into `dev/notes/`, or `docs/` for user-facing docs), parked debt moves into the table below, and the file is deleted. The rest stay one line each and are reshaped by what we learn.
+> Planned **one ahead** (D-19). The running milestone gets one file, `M<n>.md`: scope, open points, measurements, and its debt to fix. When its steps are done and the outside audit is triaged ([CLAUDE.md](../../../CLAUDE.md#how-we-iterate)), what lasts is folded out of it (into `dev/notes/`, or `docs/` for user-facing docs), parked debt moves into the table below, and the file is deleted. The rest stay one line each and are reshaped by what we learn.
 
 **Steps inside a milestone.** A milestone file splits its work into numbered steps, each ending with something the user can check (what pass and fail look like). Only the current step is planned in detail; later steps stay a line or two and are detailed when reached, since each step's result reshapes the next. Work that shares code or data, or that would be checked together anyway, stays one step: splitting is for clear checkpoints, not for its own sake.
 
