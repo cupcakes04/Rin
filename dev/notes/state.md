@@ -8,24 +8,29 @@
 
 ```mermaid
 flowchart LR
-    E["M1 core + ingest<br/>✅ closed"] --> F["M2 filters + embeddings<br/>✅ closed"] --> G["M3 teacher + checked test set<br/>✅ closed"] --> H["M4 selection + student<br/>🔁 reopened: step 6"] --> I["M5 the proof<br/>⏭ after M4"]
-    style H fill:#fde68a,color:#000
+    E["M1 core + ingest<br/>✅ closed"] --> F["M2 filters + embeddings<br/>✅ closed"] --> G["M3 teacher + checked test set<br/>✅ closed"] --> H["M4 selection + student<br/>✅ closed"] --> I["M5 the proof<br/>⏭ the task first, then plan"]
+    style I fill:#fde68a,color:#000
 ```
 
 ## Done
 - **Direction and decisions:** D-01 … D-41 agreed ([decisions.md](decisions.md)); nothing Proposed or Open. Design target: [usage.md](usage.md) on [data_model.md](data_model.md).
-- **M1 to M3 closed; M4 steps 1–5 done.** What exists and its rules: [docs/core.md](../../docs/core.md); setup: [docs/install.md](../../docs/install.md). 171 CPU tests.
+- **M1 to M4 closed.** What exists and its rules: [docs/core.md](../../docs/core.md); setup: [docs/install.md](../../docs/install.md). 190 CPU tests.
 - **The test set** (M3): run `20261127-094340-human.annotate-64f9`, 300 checked frames from five days; as COCO truth: `20261127-152506-export.coco-8bc8`.
-- **M4's write-ups:** [m4_selection](../research/m4_selection/README.md), [m4_training_labels](../research/m4_training_labels/README.md), [m4_first_curve](../research/m4_first_curve/README.md) (its numbers carry known faults, stated there).
-- **Audit of M4 triaged with the user** (2026-11-27, [report](../audits/2026-11-27.md), triage at its end). Checked: Ultralytics stepped once per 8 batches with an unrecorded optimizer, so small budgets trained far less; `yolo.predict` capped the stock baseline's person boxes; val holds no empty frame. The user's calls: reopen M4 rather than carry the fixes into M5; D-40 (explicit optimizer, a step per batch, a step floor), D-41 (quiet frames stay in the pool), D-31 (val gains 17:00 empty-gym clips), D-38 (random per camera).
+- **M4 (closed 2026-11-27, after the audit's fixes in step 6):**
+  - [m4_selection](../research/m4_selection/README.md): the pool is the busy 09:55–10:55 plus a quiet 17:10–17:40 (D-41), no motion filter: 4,683 candidates, 230 quiet, 3 empty; val 321 (D-31). With two kinds of scene, kcenter and kmeans_stratified pick quiet, sparse frames above random's rate.
+  - [m4_training_labels](../research/m4_training_labels/README.md): SAM3 on every candidate (two runs; `curate.difference` labels only new ones); D-39's gate.
+  - [m4_first_curve](../research/m4_first_curve/README.md): corrected stock yolo26s scores 0.629; students gain at most 0.03 (0.661 at 1,000 frames), mostly on small people, and add boxes on empty frames. More optimizer steps made students worse at every budget, so D-40 keeps M4's setting, now stated.
+- **The audit of M4** ([report](../audits/2026-11-27.md), triage at its end): code fixes in (class filtering before `max_det`, split guards, stated optimizer, per-camera random, and more); its starvation worry was measured and rejected.
+- **New rule:** the outside audit runs before a milestone closes ([CLAUDE.md](../../CLAUDE.md), "Audits").
+- **`m.delete(run)`** exists (refuses a run others depend on, and a person's work); superseded M4 runs deleted with the user's yes.
 
 ## Next
-1. **M4 step 6b, training steps** ([M4.md](milestones/M4.md)): 6a is done (fixes, 186 tests, GPU smoke). 6b repeats small training sets rather than lengthening them (Ultralytics validates every epoch); confirm with the user, then run (about 1.5 h GPU). Then 6c (quiet frames), 6d (redo the curve), and M4 closes.
-2. **Plan M5** from the parked-debt rows triggered by "M5 is planned" ([milestones/](milestones/README.md#parked-debt)).
+1. **Choose M5's task** with the user: the agent recommends the proof on a rare concept COCO lacks, in long fixed-camera footage ([where_distillation_pays](ideas/where_distillation_pays.md)): screen concepts on MEVA first, then a sparse checked test set, then the curve. Changes D-17's "class person first".
+2. **Then plan M5** from the parked-debt rows triggered by "M5 is planned" ([milestones/](milestones/README.md#parked-debt)); some (lower budgets, cluster counts, empty frames) belong to the gym and are re-read against the new task.
 
 ## Waiting on the user
-- **6b's plan:** a yes to repeating small training sets (`epoch_images`) and to the seven-run measurement.
-- **Commit:** step 6a's code and tests, the audit-before-close rule in `CLAUDE.md`, and the triage (audit report with its triage, decisions D-31/38/40/41, `M4.md`, milestones and parked debt, `m4_first_curve` faults note, `holy_grail`, `models/README`, `usage`, this file).
+- **M5's direction:** yes or no to the rare-concept proof (and the gym closing as a finding).
+- **Commit:** everything since `981723f`: the audit and its triage; M4 step 6 (code and tests: `yolo` class filtering, stated optimizer, clamping, dropped no-area boxes; `curate.select` per-camera random; split guards; `curate.difference`; `m.delete`); the 6b and 6c scripts and rewritten write-ups; decisions D-31/38/40/41; `CLAUDE.md`'s audit rule; ideas `where_distillation_pays` and `crowd_labelling`; `docs/core.md`, `usage`, `heavy_data`, `pull_meva.sh`, `superseded_runs.py`; milestones (M4 closed, `M4.md` deleted); this file.
 
 ## Vendor feature requests (to the user)
 None open.

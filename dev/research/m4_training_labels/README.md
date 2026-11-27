@@ -2,14 +2,14 @@
 
 **Question.** The student learns from SAM3's unchecked boxes (usage C2). Which ones: above what score, of what size, and are the "same spot all window" boxes that were bags and coats on the test days (M3) also errors in the pool? The answer is D-39.
 
-**Setup** (M4 step 2, 2026-11-27).
-- **SAM3 on every candidate** (D-37): run `20261127-111139-sam3.concept-5477` on `20261127-111139-curate.union-365e`, the 4,453 pool candidates (`20261127-105927-curate.dedupe-6b65`) and 308 val candidates (`20261127-110156-curate.dedupe-f05d`); script [sam3_all.py](sam3_all.py).
+**Setup** (M4 steps 2 and 6c, 2026-11-27).
+- **SAM3 on every candidate** (D-37), in two runs: `20261127-111139-sam3.concept-5477` on M4's busy-hour candidates (4,453 pool, 308 val; [sam3_all.py](sam3_all.py)), and, after the pool and val gained quiet footage (D-41), `20261127-210937-sam3.concept-83bc` on the 244 candidates the first run hadn't seen (`curate.difference`, `20261127-210937-curate.difference-9a08`; [pool_chain.py](../m4_selection/pool_chain.py)). Together they label all 4,683 pool and 321 val candidates; training datasets pass both runs.
 - **The gate** is measured on test frames against two truths: the checked test set (`20261127-094340-human.annotate-64f9`, 300 frames) and the blind pilot (`20261126-151047-human.annotate-3bd2`, 18 frames, 180 people), with SAM3 run `20261126-205940-sam3.concept-11ee`. Script [gate.py](gate.py): a SAM3 box is right when it matches a checked box at IoU ≥ 0.5 (greedy, highest score first); an unmatched box at least half inside a `crowd` box is ignored (D-34).
-- **The bags:** `human.suspects(above=0.5)` on the pool candidates' labels.
+- **The bags:** `human.suspects(above=0.5)` on the busy pool candidates' labels, and on the quiet ones'.
 
 ## Results
 
-**Cost.** 675,492 detections above 0.1 on 4,761 frames in 6,491 s: **1.36 s per frame** (0.78 on the sparser test frames), peak VRAM 6.6 GiB. Above 0.5 on the pool: 220,436 boxes, about 49 per frame.
+**Cost.** 675,492 detections above 0.1 on 4,761 busy frames in 6,491 s: **1.36 s per frame**, peak VRAM 6.6 GiB; 5,922 on the 244 quiet ones in 93 s (0.38 s per frame; 0.78 on the test frames). Above 0.5 on the busy pool: 220,436 boxes, about 49 per frame.
 
 **The gate:**
 
@@ -27,7 +27,7 @@
 - **0.5 is the knee:** from 0.45 to 0.5 the wrong boxes halve and no checked person is lost. Choosing the gate on the test set favours no method: every method gets the same gate.
 - **No size gate:** 79 of the 259 wrong boxes at 0.5 are under 40 px tall, but so are 340 of the 3,432 checked people (all 20–40 px; none smaller).
 
-**The bags.** 15,355 pool boxes (7%) sit on the same spot in at least half of their camera's frames, in 45 spots on 4,151 of 4,453 frames; 626 more are near-duplicates. The 30 largest spots, cropped at the start, middle and end of the hour ([pool_same_spot.jpg](pool_same_spot.jpg), one row per spot), are almost all **people seated on the bleachers**: one seat, occupied all hour. Close-ups of the odd ones ([pool_same_spot_zoom.jpg](pool_same_spot_zoom.jpg)): people standing at the screen's edge, a person lying on a bench, and one real error of another kind, a box over two seated people (773 boxes). No bag or coat; the user looked and agreed. Checking the pool needed a fix to `human.suspects`: its same-spot check built a 90 GiB box-by-box matrix and now works in chunks, with identical flags on the test set.
+**The bags.** 15,355 pool boxes (7%) sit on the same spot in at least half of their camera's frames, in 45 spots on 4,151 of 4,453 frames; 626 more are near-duplicates. The 30 largest spots, cropped at the start, middle and end of the hour ([pool_same_spot.jpg](pool_same_spot.jpg), one row per spot), are almost all **people seated on the bleachers**: one seat, occupied all hour. Close-ups of the odd ones ([pool_same_spot_zoom.jpg](pool_same_spot_zoom.jpg)): people standing at the screen's edge, a person lying on a bench, and one real error of another kind, a box over two seated people (773 boxes). No bag or coat; the user looked and agreed. On the 244 quiet candidates, no box sits on the same spot (2 near-duplicates on one frame); their boxes are people crossing the floor ([quiet_sample.jpg](../m4_selection/quiet_sample.jpg); the user looked and agreed, with one box 50/50: a dark shape by the bin on G299 frame 2745, where people do pass). Checking the pool needed a fix to `human.suspects`: its same-spot check built a 90 GiB box-by-box matrix and now works in chunks, with identical flags on the test set.
 
 ## Verdict
 

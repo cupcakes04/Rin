@@ -1,8 +1,9 @@
-"""What each selection method picks from the pool (M4 step 3).
+"""What each selection method picks from the pool (M4 steps 3 and 6c).
 
     uv run python dev/research/m4_selection/measure.py
 
-Per method at seed 0 and each budget (first N): share of G299; people per frame and box heights
+Per method at seed 0 and each budget (first N): share of G299; frames from the quiet footage (17 h)
+and how many of them are empty; people per frame and box heights
 from D-39's training labels (SAM3 >= 0.5); spread in time (distinct minutes, per camera);
 coverage, the mean Euclidean distance (raw DINOv3 CLS) from every candidate to its nearest picked
 frame of the same camera, and radius, the largest such distance (what kcenter minimises); and how many frames the methods and seeds share at 1,000.
@@ -12,19 +13,18 @@ import numpy as np
 
 from rin import Master
 
-CANDS, EMB, LABELS = (
-    "20261127-105927-curate.dedupe-6b65", "20261127-104644-dinov3.embed-32fd", "20261127-111139-sam3.concept-5477"
-)
+CANDS, EMB = "20261127-210554-curate.dedupe-6a1d", "20261127-205124-dinov3.embed-a983"
+LABELS = ["20261127-111139-sam3.concept-5477", "20261127-210937-sam3.concept-83bc"]  # M4's, and the new candidates'
 SELECTIONS = {
-    "random": ["20261127-132314-curate.select-5da9", "20261127-132314-curate.select-8594", "20261127-132314-curate.select-4375"],
-    "kcenter": ["20261127-132314-curate.select-8f97", "20261127-132326-curate.select-5543", "20261127-132338-curate.select-9aab"],
-    "kmeans_stratified": ["20261127-132349-curate.select-2d06", "20261127-132359-curate.select-d369", "20261127-132408-curate.select-c75a"],
+    "random": ["20261127-211121-curate.select-8f6c", "20261127-211121-curate.select-a594", "20261127-211121-curate.select-ba0f"],
+    "kcenter": ["20261127-211121-curate.select-49c7", "20261127-211130-curate.select-f598", "20261127-211139-curate.select-ec4e"],
+    "kmeans_stratified": ["20261127-211148-curate.select-f500", "20261127-211158-curate.select-a364", "20261127-211207-curate.select-1516"],
 }
-BUDGETS = [100, 250, 500, 1000]
+BUDGETS = [25, 100, 250, 1000]
 
 m = Master("workspace/store")
 frames = m.sql(
-    """SELECT s.media_id, s.frame_idx, d.camera,
+    """SELECT s.media_id, s.frame_idx, d.camera, hour(d.started_at) >= 17 AS quiet,
               CAST(floor(epoch(d.started_at) / 60 + f.pts / 60) AS BIGINT) AS minute, e.row
        FROM frame_sets s JOIN media d USING (media_id) JOIN frames f USING (media_id, frame_idx)
        JOIN embeddings e ON e.run_id = ? AND e.kind = 'cls' AND e.media_id = s.media_id AND e.frame_idx = s.frame_idx
@@ -34,7 +34,7 @@ frames = m.sql(
 key = list(zip(frames.media_id, frames.frame_idx))
 index = {k: i for i, k in enumerate(key)}
 boxes = m.sql(
-    "SELECT media_id, frame_idx, (y1 - y0) * 1080 AS h FROM instances WHERE run_id = ? AND score >= 0.5", [LABELS]
+    "SELECT media_id, frame_idx, (y1 - y0) * 1080 AS h FROM instances WHERE list_contains(?, run_id) AND score >= 0.5", [LABELS]
 ).df()
 people = boxes.groupby(["media_id", "frame_idx"]).size()
 frames["people"] = [int(people.get(k, 0)) for k in key]
@@ -61,6 +61,7 @@ def describe(rows: list[int]) -> dict:
         cover.append(d)
     return {
         "G299": (sub.camera == "G299").mean(),
+        "quiet": int(sub.quiet.sum()), "empty": int((sub.people == 0).sum()), "<=5 people": int((sub.people <= 5).sum()),
         "people mean": sub.people.mean(), "people p10-p90": f"{sub.people.quantile(.1):.0f}-{sub.people.quantile(.9):.0f}",
         "box h median": np.median(h), "boxes < 40px": (h < 40).mean(),
         "minutes": sub.groupby("camera").minute.nunique().sum(),

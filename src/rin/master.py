@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 import warnings
 from pathlib import Path
 from typing import Any
@@ -48,6 +49,21 @@ class Master:
 
     def run(self, run_id: str) -> Run:
         return Run(self, run_id)
+
+    def delete(self, run: Run) -> None:
+        """Remove a run from the store for good. Refused while another run takes it as input
+        (delete that one first), and for a person's work (`human.*` runs), which no step can
+        redo. The folder leaves `runs/` in one rename, so a crash can't leave half a run."""
+        if not isinstance(run, Run):
+            raise TypeError(f"delete takes a Run, got {run!r}")
+        if run.step.startswith("human."):
+            raise ValueError(f"{run.id} is a person's work ({run.step}); Rin doesn't delete it")
+        users = [r for r, in self.sql("SELECT run_id FROM runs WHERE list_contains(inputs, ?)", [run.id]).fetchall()]
+        if users:
+            raise ValueError(f"{run.id} is an input of {len(users)} runs, e.g. {users[:3]}; delete those first")
+        doomed = self.layout.tmp / f"deleting-{run.id}"
+        self.layout.run_dir(run.id).rename(doomed)
+        shutil.rmtree(doomed)
 
     def runs(self) -> duckdb.DuckDBPyRelation:
         return self.sql("SELECT run_id, step, config, tags, inputs, who, finished_at FROM runs ORDER BY run_id")

@@ -55,7 +55,7 @@ def train(
     lr0: float = 0.002,
     momentum: float = 0.9,
     warmup_bias_lr: float = 0.0,
-    accumulate: int = 1,
+    accumulate: int = 8,
     tags: dict[str, Any] | None = None,
 ) -> Run:
     """Train `model` (a stock checkpoint file, e.g. workspace/checkpoints/yolo/yolo26s.pt) on the
@@ -65,7 +65,7 @@ def train(
 
     The optimizer is stated, never Ultralytics' "auto" (D-40): `optimizer`, `lr0`, `momentum`
     and `warmup_bias_lr` default to what "auto" picked for M4's runs, and `accumulate` batches
-    make one optimizer step (Ultralytics' default was 64 images, 8 batches of 8)."""
+    make one optimizer step (8 batches of 8: Ultralytics' default of 64 images per step)."""
     if export.step != "export.yolo":
         raise TypeError(f"train needs an export.yolo run; {export.id} is {export.step}")
     model = Path(model).resolve()
@@ -220,6 +220,11 @@ def predict(
             raise RuntimeError(f"The job returned classes {stray}, not asked for in {classes}")
         for d in found:
             d["box"] = _clamped(d["box"])
+        # Ultralytics clips boxes to the image, so a box lying past an edge comes back with no
+        # width or height; it can't be stored (D-10), and is counted in `metrics` instead.
+        kept = [d for d in found if d["box"][0] < d["box"][2] and d["box"][1] < d["box"][3]]
+        dropped = len(found) - len(kept)
+        found = kept
         n = len(found)
         w.add_provenance(**report["versions"])
         w.write("instances", pa.table({
@@ -233,7 +238,12 @@ def predict(
             "keypoints": pa.nulls(n),
             "track_id": pa.nulls(n, pa.int64()),
         }))
-        print(f"yolo.predict: {n} boxes on {len(images)} frames in {report['seconds']:.0f} s")
+        w.write("metrics", pa.table({
+            "name": ["boxes_dropped_no_area"], "class": pa.nulls(1, pa.string()),
+            "value": pa.array([float(dropped)], pa.float64()),
+        }))
+        print(f"yolo.predict: {n} boxes on {len(images)} frames in {report['seconds']:.0f} s"
+              + (f" ({dropped} with no area dropped)" if dropped else ""))
         spec_file.unlink()  # absolute paths to cached frames: derived, not provenance
         (w.tmp_dir / "job.json").unlink()
     return m.run(w.run_id)

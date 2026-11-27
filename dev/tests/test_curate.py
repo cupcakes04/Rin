@@ -399,6 +399,24 @@ def test_union_holds_every_frame_once(m: Master, clips: Path) -> None:
     assert frames["rank"].isna().all() and both.inputs == [a.id, b.id, a_again.id]
 
 
+def test_difference_keeps_the_frames_no_other_set_holds(m: Master, clips: Path) -> None:
+    a = core.sample(m, core.ingest(m, clips / "cfr.mkv", split="test"), fps=10)
+    some = curate.random(m, a, n=5, seed=0)
+    more = curate.random(m, a, n=3, seed=1)
+    rest = curate.difference(m, a, [some, more])
+    taken = {tuple(k) for r in (some, more) for k in r.frame_set().df()[["media_id", "frame_idx"]].values.tolist()}
+    left = {tuple(k) for k in rest.frame_set().df()[["media_id", "frame_idx"]].values.tolist()}
+    assert left == {tuple(k) for k in a.frame_set().df()[["media_id", "frame_idx"]].values.tolist()} - taken
+    assert rest.frame_set().df()["rank"].isna().all() and rest.inputs == [a.id, some.id, more.id]
+
+
+def test_difference_refuses_an_empty_list_or_a_set_twice(m: Master, every_frame: Run) -> None:
+    with pytest.raises(ValueError, match="non-empty"):
+        curate.difference(m, every_frame, [])
+    with pytest.raises(ValueError, match="twice"):
+        curate.difference(m, every_frame, [every_frame])
+
+
 @pytest.mark.parametrize("bad", ["one", "twice"])
 def test_union_refuses_one_set_or_the_same_set_twice(m: Master, every_frame: Run, bad: str) -> None:
     with pytest.raises(ValueError, match="at least two" if bad == "one" else "twice"):

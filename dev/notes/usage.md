@@ -114,38 +114,38 @@ len(frames)                                   # 14,424: 24 clips × 601 (t = 0, 
 scores = curate.score_frames(m, frames, ["motion", "blur", "dark", "bright"])   # CPU, 320-wide copy
 scores.frame_scores().df().groupby("name")["value"].describe()                  # look before choosing
 
-kept = curate.keep(m, scores, where="motion >= 0.002")
-len(kept)                                                                       # 14,198 of 14,424
+kept = curate.keep(m, scores, where="blur >= ...")                              # only if the footage has glitches
 ```
 
 - **What:** `score_frames` measures each frame (frame difference, variance of the Laplacian, clipped histogram ends; definitions in `curate.SCORES`) and stores the numbers. `keep` applies thresholds to the stored numbers and writes the survivors as a new frame set.
 - **Why:** scoring decodes video and is slow; choosing a threshold is a query and takes no time. Splitting them means you can try five thresholds without decoding again (D-26). The `where` text is saved in the run, so the threshold is never lost.
-- **Without it:** idle CCTV fills the selection with empty, identical frames, and farthest-point selection picks blurred glitches because they look "far" from everything ([holy_grail §3](ideas/holy_grail.md#3-selection-methods-to-compare)).
+- **Not motion, in the holy grail's chain (D-41):** a motion threshold drops quiet frames, and M4's students, whose pool held no quiet room, boxed ghosts on empty test frames; dedupe (A5) thins quiet stretches instead. The holy grail's chain on MEVA uses no filter here: it goes from A2 straight to A4.
+- **Without glitch filters where footage has them:** farthest-point selection picks blurred glitches because they look "far" from everything ([holy_grail §3](ideas/holy_grail.md#3-selection-methods-to-compare)).
 
 ### A4 · Embed
 
 ```python
 emb = dinov3.embed(
-    m, kept,
+    m, frames,
     model="facebook/dinov3-vitl16-pretrain-lvd1689m",
     revision="ea8dc2863c51be0a264bab82070e3e8836b02d51",    # the cached commit; loaded offline
     size=(896, 512),              # (width, height), multiples of 16; keeps 16:9 (M2)
     what=["cls"],                 # D-14: no patch grids by default
     batch_size=32,
 )
-emb.vectors().shape               # (len(kept), 1024)
+emb.vectors().shape               # (len(frames), 1024)
 ```
 
 - **What:** a batch job in the DINOv3 environment: one vector per frame, saved as an array file plus an index table. The frames are resized to 896×512, not the preprocessor's default 224×224 square, so people stay about three patches tall ([models](models/README.md#known-gotchas)).
 - **Why:** selection needs a sense of "how different are these two frames"; distance between embeddings is that sense.
 - **Without it:** the only selection left is random. Note the risk: on a fixed camera whole-frame vectors may barely differ ([holy_grail §4](ideas/holy_grail.md#4-the-main-risk-fixed-cameras)). Then `what=["box_pooled"]` with person boxes is the next try, and the rest of the notebook doesn't change.
 - **Why DINOv3 and not EmbeddingGemma 2:** they measure different kinds of "different". DINOv3 learned from images alone, so its distance tracks what the picture looks like: where people stand, how big, how lit, how occluded. That is what a person detector has to learn. EmbeddingGemma learned to match images to text, so its distance tracks what you would *say* about a frame. "A schoolyard with people" describes most of the pool, so many frames a detector would find different could come out close together. That is a reasoned guess, not a measurement. Gemma's real strength is text search ("people carrying boxes", [search.md](ideas/search.md)), which comes after the holy grail.
-- **Both is cheap to test:** an embedding is just another run, so `gemma.embed(m, kept, task="clustering")` would slot into A5 and C1 unchanged. Recommendation: DINOv3 alone for the first curve; add a Gemma line only if DINOv3 whole-frame doesn't beat random, alongside the foreground features above.
+- **Both is cheap to test:** an embedding is just another run, so `gemma.embed(m, frames, task="clustering")` would slot into A5 and C1 unchanged. Recommendation: DINOv3 alone for the first curve; add a Gemma line only if DINOv3 whole-frame doesn't beat random, alongside the foreground features above.
 
 ### A5 · De-duplicate
 
 ```python
-cands = curate.dedupe(m, kept, emb, cosine_max=0.99)
+cands = curate.dedupe(m, frames, emb, cosine_max=0.99)
 len(cands)                                              # 4,453
 ```
 

@@ -70,8 +70,8 @@ def test_train_files_weights_metrics_and_leaves_the_export_untouched(
     assert run.info["model"] == "yolo26s" and run.info["checkpoint"] == "checkpoints/yolo/yolo26s.pt"
     assert len(run.info["checkpoint_sha256"]) == 64
     assert seen["epochs"] == 4 and seen["seed"] == 1 and run.tags == {"n": 8}
-    # The optimizer is stated (D-40): what Ultralytics' "auto" picked for M4, one step per batch.
-    stated = {"optimizer": "AdamW", "lr0": 0.002, "momentum": 0.9, "warmup_bias_lr": 0.0, "accumulate": 1}
+    # The optimizer is stated (D-40): what Ultralytics' "auto" picked for M4, one step per 8 batches.
+    stated = {"optimizer": "AdamW", "lr0": 0.002, "momentum": 0.9, "warmup_bias_lr": 0.0, "accumulate": 8}
     assert {k: seen[k] for k in stated} == stated and {k: run.config[k] for k in stated} == stated
     after = sorted(p.relative_to(m.layout.run_dir(exported.id)) for p in m.layout.run_dir(exported.id).rglob("*"))
     assert after == before  # the labels cache went into the copy, not the export
@@ -110,12 +110,14 @@ def test_predict_hands_classes_to_the_job_and_clamps_rounding(
 ) -> None:
     seen: dict = {}
     dets = [{"image": 0, "class": "person", "score": 0.8, "box": [-1e-7, 0.1, 0.5, 1.0000001]},
-            {"image": 1, "class": "person", "score": 0.4, "box": [0.2, 0.2, 0.4, 0.6]}]
+            {"image": 1, "class": "person", "score": 0.4, "box": [0.2, 0.2, 0.4, 0.6]},
+            {"image": 1, "class": "person", "score": 0.3, "box": [0.7, 1.0, 0.8, 1.0]}]  # clipped flat at the edge
     monkeypatch.setattr(YOLO_MODULE, "run_job", _fake_predict(seen, dets))
     run = yolo.predict(m, checkpoint, setup["val"], imgsz=1280, classes=["person"])
     assert seen["classes"] == ["person"] and seen["max_det"] == 100
     boxes = run.instances().df().sort_values("score", ascending=False)
-    assert boxes[["x0", "y1"]].values.tolist()[0] == [0.0, 1.0]
+    assert boxes[["x0", "y1"]].values.tolist()[0] == [0.0, 1.0] and len(boxes) == 2
+    assert m.sql("SELECT value FROM metrics WHERE run_id = ? AND name = 'boxes_dropped_no_area'", [run.id]).fetchall() == [(1.0,)]
     assert run.info["model"] == "yolo26s" and run.info["checkpoint"] == "checkpoints/yolo/yolo26s.pt"
 
 

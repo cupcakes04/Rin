@@ -43,6 +43,29 @@ def test_a_finished_run_appears_whole(m: Master) -> None:
     assert m.sql("SELECT tags->>'method' FROM runs").fetchall()[0] == ("kcenter",)
 
 
+def test_delete_removes_a_run_only_when_nothing_needs_it(m: Master) -> None:
+    with m.writer(step="test.parent", config={}, inputs=[]) as w:
+        w.write("frame_sets", _frame_set())
+    parent = m.run(w.run_id)
+    with m.writer(step="test.child", config={}, inputs=[parent.id]) as w:
+        w.write("frame_sets", _frame_set(2))
+    child = m.run(w.run_id)
+    with pytest.raises(ValueError, match="input of 1 runs"):
+        m.delete(parent)
+    m.delete(child)
+    m.delete(parent)
+    assert m.sql("SELECT count(*) FROM runs").fetchall() == [(0,)]
+    assert not m.layout.run_dir(parent.id).exists() and not any(m.layout.tmp.iterdir())
+
+
+def test_delete_refuses_a_persons_work(m: Master) -> None:
+    with m.writer(step="human.annotate", config={}, inputs=[]) as w:
+        w.write("frame_sets", _frame_set())
+    with pytest.raises(ValueError, match="person's work"):
+        m.delete(m.run(w.run_id))
+    assert m.layout.run_dir(w.run_id).exists()
+
+
 def test_a_failed_run_leaves_nothing(m: Master) -> None:
     with pytest.raises(RuntimeError, match="boom"):
         with m.writer(step="test.step", config={}, inputs=[]) as w:
