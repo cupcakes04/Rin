@@ -228,7 +228,8 @@ budgets = [100, 250, 500, 1000]                            # placeholder: limite
 sel = {}
 for meth in methods:
     for s in seeds:
-        sel[(meth, s)] = curate.select(m, cands, emb, method=meth, n_max=max(budgets), seed=s)
+        extra = {"clusters": 50} if meth == "kmeans_stratified" else {}   # 50 per camera (M4)
+        sel[(meth, s)] = curate.select(m, cands, emb, method=meth, n_max=max(budgets), seed=s, **extra)
 ```
 
 - **What:** each call writes a **ranked** list of up to 1000 frames. Budget 250 means the first 250 of that list (D-28). `kcenter` and `kmeans_stratified` rank each camera on its own, by Euclidean distance, and take the cameras in turns, so every budget is half from each camera (D-38).
@@ -255,7 +256,7 @@ for (meth, s), picks in sel.items():
     for n in budgets:
         tags = {"method": meth, "seed": s, "n": n}
         ds   = m.dataset(labels=[pool_labels], frames=picks, top=n,
-                         gate="score >= 0.4 AND area BETWEEN 0.0001 AND 0.5")   # placeholders: M4 step 2; area = w * h, derived
+                         gate="score >= 0.5")   # D-39: no size gate; near-duplicates keep the higher score
         exp     = export.yolo(m, ds, classes=["person"], val=val_labels, tags=tags)   # val: D-31, chosen in M4
         student = yolo.train(m, exp, model="yolo26s", epochs=100, imgsz=1280, seed=s, tags=tags)  # placeholders: M4
         coco.evaluate(m, student, test_exp, tags=tags)       # COCO scoring, crowd regions ignored (D-34)

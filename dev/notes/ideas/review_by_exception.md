@@ -27,6 +27,19 @@ flowchart LR
 
 Between "trusted" and "a person checks" there may be a middle lane: a cheap vision-language model behind an API looks at the frames or boxes the rule doesn't trust and answers narrow questions, e.g. "is this crop a person?" for each uncertain box, or "is anyone in this frame not boxed?". It would clear the obvious cases (a coat on a bench, a duplicate box) and leave the person only what it can't settle. Same rule as everywhere: its answers are measured against checked frames before they're trusted, and its cost per frame against a person's seconds per box (the pilot: about 7 s per box drawn from scratch). The VLM work for actions ([vlm_window_actions.md](vlm_window_actions.md)) already runs such models locally; an API is the cheaper-to-try option.
 
+## One level up: per task, not per frame (the user, 2026-11-27)
+
+The same routing applies to whole tasks. How hard a task is matters less than **how reliable the teacher is on it**, and that is cheap to measure: a small blind check (the M3 pilot: 20 frames, 22 minutes) gives the teacher's precision and recall. Where both are high (cars, traffic lights, clearly visible people) the loop can run with no person except on the test set. Where they aren't (dense crowds, fine actions), a person stays in the loop, the hard part becomes an ignore region (D-34 is this, inside one task), or the task is out of scope. Rin would then offer two workflows, and the boundary between them is a measurement, not a judgement of the task.
+
+```mermaid
+flowchart LR
+    T["New task or scene"] --> P["Small blind check<br/>(~20 frames)"]
+    P -->|"teacher reliable"| A["Automatic loop<br/>(a person checks only the test set)"]
+    P -->|"teacher unreliable"| H["Person in the loop,<br/>ignore regions,<br/>or out of scope"]
+```
+
+What the boundary is in numbers is open; M5 gives the first point on it: whether a student trained on SAM3's unchecked labels at this gym's measured reliability (precision 0.93 at its gate, [M4](../milestones/M4.md#measurements)) learns well enough.
+
 ## First measurement (M3, 300 test frames)
 
 From SAM3's detector boxes above 0.5 to the checked test set ([m3_checked_test_set](../../research/m3_checked_test_set/README.md)), with frames flagged by `human.suspects` (a box on the same spot on at least half of a camera's frames that day, or a near-duplicate):

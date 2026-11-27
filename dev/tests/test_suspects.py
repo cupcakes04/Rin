@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -42,7 +43,12 @@ def _run(m: Master, frames: Run, boxes: list[tuple], *, config: dict | None = No
     return m.run(w.run_id)
 
 
-def test_a_box_on_the_same_spot_in_most_frames_is_flagged(m: Master, frames: Run) -> None:
+@pytest.mark.parametrize("chunk", [256, 1, 3])
+def test_a_box_on_the_same_spot_in_most_frames_is_flagged(
+    m: Master, frames: Run, monkeypatch: pytest.MonkeyPatch, chunk: int
+) -> None:
+    """Also in tiny chunks: the check runs over chunks of boxes so a pool hour fits in memory."""
+    monkeypatch.setattr(sys.modules["rin.human.suspects"], "SAME_SPOT_CHUNK", chunk)
     n = len(frames)
     bag = [(k, 0.1, 0.6, 0.15, 0.7) for k in range(n)]  # never moves
     walker = [(k, 0.2 + 0.7 * k / n, 0.3, 0.25 + 0.7 * k / n, 0.6) for k in range(n)]  # crosses the room

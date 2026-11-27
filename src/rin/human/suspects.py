@@ -18,6 +18,10 @@ from rin.master import Master
 from rin.run import Run
 
 
+SAME_SPOT_CHUNK = 256
+"""Boxes compared against all others at once in the same-spot check (memory, not results)."""
+
+
 def suspects(
     m: Master,
     frames: Run,
@@ -84,13 +88,16 @@ def suspects(
             by_camera_day[(row[6], row[7], row[8])].append(row)
     for key, group in by_camera_day.items():
         b = np.array([r[2:6] for r in group])
-        frame_of = [(r[0], r[1]) for r in group]
-        overlaps = _iou(b, b) >= same_spot_iou
+        # `rows` is sorted by frame, so each frame's boxes are one block of columns: a box's
+        # frame count is the number of blocks holding a box that overlaps it.
+        frame_starts = np.flatnonzero([i == 0 or group[i][:2] != group[i - 1][:2] for i in range(len(group))])
         need = max(same_spot_min_frames, same_spot_share * frames_per_camera_day[key])
-        for i, row in enumerate(group):
-            n = len({frame_of[j] for j in np.flatnonzero(overlaps[i])})
-            if n >= need:
-                flag(row, f"same spot on {n} of {frames_per_camera_day[key]} frames")
+        # In chunks of boxes: the full box-by-box matrix of a pool hour is ~10^10 cells.
+        for c in range(0, len(group), SAME_SPOT_CHUNK):
+            overlaps = _iou(b[c : c + SAME_SPOT_CHUNK], b) >= same_spot_iou
+            n_frames = np.logical_or.reduceat(overlaps, frame_starts, axis=1).sum(axis=1)
+            for i in np.flatnonzero(n_frames >= need):
+                flag(group[c + i], f"same spot on {n_frames[i]} of {frames_per_camera_day[key]} frames")
 
     # Duplicates, per frame.
     by_frame: dict[tuple, list[tuple]] = defaultdict(list)

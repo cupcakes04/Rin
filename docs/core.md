@@ -33,6 +33,7 @@ result = module.verb(m, inputs, **that_step's_own_arguments)
 | `curate.random(m, frames, n=..., seed=...)` | `n` frames drawn at random, `rank` = draw order (the first k are a random k). Same seed, same frames in any store with the same files | `frame_sets` |
 | `curate.union(m, [frame_set, ...])` | Every frame of the given frame sets, once, unranked | `frame_sets` |
 | `curate.dedupe(m, frames, emb, cosine_max=..., kind="cls")` | Walks each stream's frames in time order and drops a frame whose vector is more similar than `cosine_max` to the last kept one. Refuses all-zero vectors | `frame_sets` |
+| `curate.select(m, frames, emb, method=..., n_max=..., seed=..., clusters=None, kind="cls")` | Up to `n_max` frames, ranked (`rank` 0, 1, …), so budget N is the first N (D-28). `method` is one of `curate.METHODS`: `random` (the same draw as `curate.random`), `kcenter` (farthest-point, first frame drawn by `seed`), `kmeans_stratified` (`clusters` groups per stream, one frame per cluster per round). `kcenter` and `kmeans_stratified` work per stream on Euclidean distance between raw vectors, and the streams take turns in the ranking, so every budget is even across cameras (D-38) | `frame_sets` |
 
 A `Run` has `.id`, `.step`, `.config`, `.inputs`, `.tags`, its tables as `.media()`, `.frames()`, `.frame_set()`, `.frame_scores()`, `.embeddings()`, `.instances()`, its vectors as `.vectors()` (row r belongs to the `embeddings` row whose `row` is r), and `len(run)` for a frame set.
 
@@ -93,7 +94,7 @@ flowchart TB
     subgraph steps["rin.core · rin.curate: steps the notebook calls"]
       ING["core/ingest.py<br/>files → media + frames"]
       SAM["core/sample.py<br/>media → frame set"]
-      CUR["curate/scores.py · dedupe.py · center.py ·<br/>random_frames.py · union.py ·<br/>streams.py (one camera, day, split)"]
+      CUR["curate/scores.py · dedupe.py · center.py ·<br/>random_frames.py · union.py · select.py ·<br/>streams.py (one camera, day, split)"]
     end
     subgraph servants["rin.servants: model steps"]
       DIN["dinov3/ · sam3/<br/>__init__.py caller · job.py job (own env)"]

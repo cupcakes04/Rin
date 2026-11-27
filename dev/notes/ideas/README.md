@@ -9,6 +9,6 @@ One file per idea. Status moves **raw → explored → adopted** (it becomes a d
 | [tracker_tuning.md](tracker_tuning.md) | raw | Tune BoxMOT against SAM3 tracks; one config per edge deployment |
 | [actors.md](actors.md) | raw | People first, generic tracks for everything |
 | [search.md](search.md) | raw | Text and example search over footage |
-| [review_by_exception.md](review_by_exception.md) | raw, first measurement | A person checks only what the teacher is unsure of, by a rule measured on checked frames |
+| [review_by_exception.md](review_by_exception.md) | raw, first measurement | A person checks only what the teacher is unsure of, by a rule measured on checked frames; per task, the teacher's measured reliability picks the workflow |
 
 New thoughts go to the inbox, [../brainstorms/brainstorm.md](../brainstorms/brainstorm.md), first. The agent turns them into files here.

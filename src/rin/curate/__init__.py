@@ -4,6 +4,7 @@ from rin.curate.center import center
 from rin.curate.dedupe import dedupe
 from rin.curate.random_frames import random
 from rin.curate.scores import SCORES, keep, score_frames
+from rin.curate.select import METHODS, select
 from rin.curate.union import union
 
-__all__ = ["SCORES", "center", "dedupe", "keep", "random", "score_frames", "union"]
+__all__ = ["METHODS", "SCORES", "center", "dedupe", "keep", "random", "score_frames", "select", "union"]
